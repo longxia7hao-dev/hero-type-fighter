@@ -566,3 +566,26 @@ export function matchStage(
     ? matchEnglishStage1(transcript, expected)
     : matchEnglishStage2(transcript, expected)
 }
+
+
+/** Near-miss copy for HUD (VOICE-003) */
+export function nearMissHint(
+  mode: 'zhuyin' | 'english',
+  stage: 1 | 2,
+  transcript: string,
+  expected: string[],
+  displayTarget: string,
+): string {
+  const heard = normalizeRaw(transcript).slice(0, 24)
+  const samples = expected.slice(0, 3).join('／')
+  if (mode === 'zhuyin' && stage === 1) {
+    return `聽到「${heard}」接近中 → 再試音「${displayTarget}」（可接受：${samples}）`
+  }
+  if (mode === 'zhuyin') {
+    return `聽到「${heard}」尚未對上漢字 → 再說「${displayTarget}」`
+  }
+  if (stage === 1) {
+    return `Heard “${heard}” — spell closer to ${displayTarget} (${samples})`
+  }
+  return `Heard “${heard}” — say the word “${displayTarget}”`
+}
