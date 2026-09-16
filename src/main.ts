@@ -2,16 +2,18 @@ import './style.css'
 import lottie, { type AnimationItem } from 'lottie-web'
 import {
   type GameMode,
-  type PromptItem,
+  type VoicePrompt,
   createPromptDeck,
-  charsNeeded,
+  speechLang,
 } from './prompts'
-import { ZHUYIN_ROWS } from './zhuyin'
+import { matchStage } from './match'
+import { VoiceRecognizer, isSpeechSupported, type SpeechStatus } from './speech'
 
 const MAX_HP = 100
 const MONSTER_DMG = 14
 
 type Screen = 'title' | 'fight' | 'result'
+type StageNum = 1 | 2
 
 interface State {
   screen: Screen
@@ -19,15 +21,18 @@ interface State {
   heroHp: number
   monsterHp: number
   round: number
-  deck: PromptItem[]
+  deck: VoicePrompt[]
   deckIndex: number
-  prompt: PromptItem | null
-  typed: string
+  prompt: VoicePrompt | null
+  stage: StageNum
   phase: 'idle' | 'input' | 'resolving'
   timeLeft: number
   timeMax: number
   result: 'win' | 'lose' | null
   status: string
+  heard: string
+  micStatus: SpeechStatus
+  micDetail: string
 }
 
 const state: State = {
@@ -39,12 +44,15 @@ const state: State = {
   deck: [],
   deckIndex: 0,
   prompt: null,
-  typed: '',
+  stage: 1,
   phase: 'idle',
   timeLeft: 0,
   timeMax: 1,
   result: null,
   status: '',
+  heard: '',
+  micStatus: isSpeechSupported() ? 'need-permission' : 'unsupported',
+  micDetail: '',
 }
 
 const app = document.querySelector<HTMLDivElement>('#app')!
@@ -52,35 +60,99 @@ let rafId = 0
 let lastTs = 0
 let lottieAnim: AnimationItem | null = null
 let lottieReady = false
+let stage1Passed = false
+
+const voice = new VoiceRecognizer({
+  onResult: (transcript, isFinal) => {
+    if (state.screen !== 'fight' || state.phase !== 'input' || !state.prompt) return
+    state.heard = transcript
+    updateVoiceHud()
+    if (!isFinal && transcript.trim().length < 1) return
+    // Try match on interim too (faster feedback) and final
+    tryMatch(transcript)
+  },
+  onStatus: (status, detail) => {
+    state.micStatus = status
+    state.micDetail = detail ?? ''
+    updateVoiceHud()
+  },
+  onError: (err) => {
+    if (err === 'network') {
+      state.status = '語音服務網路錯誤'
+      updateVoiceHud()
+    }
+  },
+})
 
 function clamp(n: number, a: number, b: number) {
   return Math.max(a, Math.min(b, n))
 }
 
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+function micBadgeHtml(): string {
+  const map: Record<SpeechStatus, { cls: string; label: string }> = {
+    unsupported: { cls: 'mic-bad', label: '不支援語音' },
+    'need-permission': { cls: 'mic-warn', label: '需麥克風權限' },
+    idle: { cls: 'mic-idle', label: '麥克風待命' },
+    listening: { cls: 'mic-on', label: '聆聽中…' },
+    error: { cls: 'mic-bad', label: '語音錯誤' },
+  }
+  const m = map[state.micStatus]
+  return `<div class="mic-badge ${m.cls}" id="mic-badge"><span class="mic-dot"></span>${m.label}${
+    state.micDetail && state.micStatus !== 'listening' ? ` · ${escapeHtml(state.micDetail)}` : ''
+  }</div>`
+}
+
+function stageInstruction(): string {
+  if (!state.prompt || !state.mode) return ''
+  if (state.mode === 'zhuyin') {
+    return state.stage === 1
+      ? `階段 1／2：唸出帶調注音（例：${escapeHtml(state.prompt.stage1[0] ?? '')} 或 ${escapeHtml(state.prompt.hint ?? '')}）`
+      : `階段 2／2：說出漢字「${escapeHtml(state.prompt.displaySecondary)}」`
+  }
+  return state.stage === 1
+    ? `Stage 1/2：逐字母拼出（${escapeHtml(state.prompt.displayPrimary)}）`
+    : `Stage 2/2：說出單字「${escapeHtml(state.prompt.displaySecondary)}」`
+}
+
 function render() {
   if (state.screen === 'title') {
+    const speechOk = isSpeechSupported()
     app.innerHTML = `
       <div class="screen title-screen active">
-        <div class="title-badge">TYPE FIGHTER</div>
+        <div class="title-badge">VOICE FIGHTER</div>
         <h1 class="game-title">勇者拼音快打</h1>
-        <p class="subtitle">正確輸入招式口令，勇者出劍；打錯或太慢，魔物反擊！</p>
+        <p class="subtitle">用麥克風唸出口令，勇者出劍；說錯或太慢，魔物反擊！</p>
         <div class="mode-row">
-          <button class="btn btn-zhuyin" data-mode="zhuyin" type="button">注音版</button>
-          <button class="btn btn-english" data-mode="english" type="button">英文版</button>
+          <button class="btn btn-zhuyin" data-mode="zhuyin" type="button" ${speechOk ? '' : 'disabled'}>注音語音版</button>
+          <button class="btn btn-english" data-mode="english" type="button" ${speechOk ? '' : 'disabled'}>英文語音版</button>
         </div>
         <div class="howto">
-          <strong>怎麼玩</strong><br/>
-          · 畫面中央出現提示字 → 在時限內正確輸入<br/>
-          · <strong>注音版</strong>：實體注音鍵盤或螢幕鍵盤點選（手機友善）<br/>
-          · <strong>英文版</strong>：實體鍵盤或點螢幕字母<br/>
-          · 打滿血條對方即勝；錯字／逾時會扣自己血
+          <strong>怎麼玩（語音）</strong><br/>
+          · 允許麥克風後開戰；畫面會顯示<strong>聆聽中</strong><br/>
+          · <strong>注音版</strong>：先唸帶調注音／拼音，再唸漢字<br/>
+          · <strong>英文版</strong>：先逐字母拼出，再說出單字<br/>
+          · 兩階段都過 → 勇者攻擊；失敗／逾時 → 魔物反擊<br/>
+          · 打滿<strong>對方</strong>血條即勝
+          ${
+            speechOk
+              ? ''
+              : '<br/><span class="warn-inline">此瀏覽器不支援 Web Speech API，請改用 Chrome／Edge（桌面）或 Safari（需 iOS 設定）。</span>'
+          }
         </div>
       </div>
     `
     app.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const mode = btn.dataset.mode as GameMode
-        startFight(mode)
+        void startFight(mode)
       })
     })
     return
@@ -88,15 +160,16 @@ function render() {
 
   if (state.screen === 'result') {
     const win = state.result === 'win'
+    voice.stop()
     app.innerHTML = `
       <div class="screen result-screen active ${win ? 'win' : 'lose'}">
         <h2>${win ? '勝利！' : '敗北…'}</h2>
         <p class="result-msg">
           ${win
-            ? '魔物倒下了！你的指速拯救了村莊。'
-            : '勇者力竭倒下。再練練拼音／打字吧！'}
+            ? '魔物倒下了！你的嗓音拯救了村莊。'
+            : '勇者力竭倒下。再練練發音吧！'}
         </p>
-        <p class="result-msg">回合 ${state.round} · 模式：${state.mode === 'zhuyin' ? '注音' : '英文'}</p>
+        <p class="result-msg">回合 ${state.round} · 模式：${state.mode === 'zhuyin' ? '注音語音' : '英文語音'}</p>
         <div class="mode-row">
           <button class="btn btn-zhuyin" data-again type="button">再來一局</button>
           <button class="btn btn-ghost" data-title type="button">回標題</button>
@@ -104,11 +177,12 @@ function render() {
       </div>
     `
     app.querySelector('[data-again]')!.addEventListener('click', () => {
-      if (state.mode) startFight(state.mode)
+      if (state.mode) void startFight(state.mode)
     })
     app.querySelector('[data-title]')!.addEventListener('click', () => {
       state.screen = 'title'
       stopLoop()
+      voice.stop()
       render()
     })
     return
@@ -116,21 +190,9 @@ function render() {
 
   // Fight
   const p = state.prompt
-  const needed = p ? charsNeeded(p.text) : new Set<string>()
-  const nextChar = p && state.typed.length < p.text.length ? p.text[state.typed.length] : ''
-
-  const promptChars = p
-    ? [...p.text]
-        .map((ch, i) => {
-          let cls = 'prompt-char'
-          if (i < state.typed.length) cls += ' done'
-          else if (i === state.typed.length && state.phase === 'input') cls += ' current'
-          return `<span class="${cls}" data-i="${i}">${escapeHtml(ch)}</span>`
-        })
-        .join('')
-    : ''
-
   const timerPct = state.timeMax > 0 ? clamp((state.timeLeft / state.timeMax) * 100, 0, 100) : 0
+  const stage1Cls = stage1Passed || state.stage === 2 ? 'done' : state.stage === 1 ? 'current' : ''
+  const stage2Cls = state.stage === 2 ? 'current' : stage1Passed ? '' : 'locked'
 
   app.innerHTML = `
     <div class="screen fight-screen active">
@@ -165,16 +227,33 @@ function render() {
         <div class="fx-slash" id="fx-slash"><div class="lottie-box" id="lottie-box"></div></div>
       </div>
 
-      <div class="prompt-panel">
+      <div class="prompt-panel voice-panel">
         <div class="timer-bar"><div class="timer-fill" id="timer-fill" style="transform:scaleX(${timerPct / 100})"></div></div>
-        <div class="prompt-row" id="prompt-row">${promptChars}</div>
-        <div class="prompt-hint">${p?.hint ? `提示：${escapeHtml(p.hint)}` : state.mode === 'english' ? '請輸入上方英文' : '請輸入上方注音（可點鍵盤）'}</div>
-        <div class="typed-line">${escapeHtml(state.typed) || '　'}</div>
+        ${micBadgeHtml()}
+        <div class="stage-pills">
+          <span class="stage-pill ${stage1Cls}">Stage 1</span>
+          <span class="stage-arrow">→</span>
+          <span class="stage-pill ${stage2Cls}">Stage 2</span>
+        </div>
+        <div class="prompt-row voice-prompt" id="prompt-row">
+          <span class="prompt-primary">${p ? escapeHtml(p.displayPrimary) : ''}</span>
+          <span class="prompt-sep">·</span>
+          <span class="prompt-secondary">${p ? escapeHtml(p.displaySecondary) : ''}</span>
+        </div>
+        <div class="prompt-hint" id="stage-hint">${stageInstruction()}</div>
+        <div class="heard-line" id="heard-line">聽到：${escapeHtml(state.heard) || '（尚未辨識）'}</div>
         <div class="status-toast" id="status">${escapeHtml(state.status)}</div>
+        <div class="voice-actions">
+          <button type="button" class="btn btn-mic" id="btn-mic" ${
+            state.micStatus === 'unsupported' ? 'disabled' : ''
+          }>${state.micStatus === 'listening' ? '🎤 聆聽中' : '🎤 啟用／重啟麥克風'}</button>
+          <button type="button" class="btn btn-ghost" id="btn-quit">回標題</button>
+        </div>
       </div>
 
-      <div class="keypad" id="keypad">${buildKeypad(needed, nextChar)}</div>
-      <input class="hidden-input" id="capture" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+      <div class="keypad demoted" id="keypad" aria-hidden="true">
+        <p class="keypad-note">打字鍵盤已停用 — 請用麥克風攻擊</p>
+      </div>
     </div>
   `
 
@@ -182,97 +261,77 @@ function render() {
   wireFightControls()
 }
 
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-}
-
-function buildKeypad(needed: Set<string>, nextChar: string): string {
-  if (state.mode === 'english') {
-    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
-    const rows = [letters.slice(0, 10), letters.slice(10, 19), letters.slice(19)]
-    return (
-      rows
-        .map(
-          (row) =>
-            `<div class="key-row english-hints">${row
-              .map((ch) => {
-                let cls = 'key'
-                if (needed.has(ch)) cls += ' needed'
-                if (ch === nextChar) cls += ' next'
-                return `<button type="button" class="${cls}" data-key="${ch}">${ch}</button>`
-              })
-              .join('')}</div>`,
-        )
-        .join('') +
-      `<div class="key-row"><button type="button" class="key wide" data-key="Backspace">⌫ 刪除</button></div>`
-    )
-  }
-
-  // Zhuyin: show full layout, highlight needed / next
-  return (
-    ZHUYIN_ROWS.map(
-      (row) =>
-        `<div class="key-row">${row
-          .map((ch) => {
-            let cls = 'key'
-            if (needed.has(ch)) cls += ' needed'
-            if (ch === nextChar) cls += ' next'
-            return `<button type="button" class="${cls}" data-key="${escapeHtml(ch)}">${escapeHtml(ch)}</button>`
-          })
-          .join('')}</div>`,
-    ).join('') +
-    `<div class="key-row"><button type="button" class="key wide" data-key="Backspace">⌫ 刪除</button></div>`
-  )
-}
-
 function wireFightControls() {
-  const capture = document.querySelector<HTMLInputElement>('#capture')
-  capture?.focus()
-
-  document.querySelectorAll<HTMLButtonElement>('[data-key]').forEach((btn) => {
-    btn.addEventListener('pointerdown', (e) => {
-      e.preventDefault()
-      const k = btn.dataset.key!
-      if (k === 'Backspace') onBackspace()
-      else onChar(k)
-      capture?.focus()
-    })
+  document.querySelector('#btn-mic')?.addEventListener('click', () => {
+    void (async () => {
+      const ok = await voice.ensurePermission()
+      if (!ok) return
+      if (state.mode) voice.setLang(speechLang(state.mode))
+      voice.stop()
+      voice.start()
+      state.status = '麥克風已啟動，請依階段唸出'
+      updateVoiceHud()
+    })()
   })
 
-  // Physical keyboard
+  document.querySelector('#btn-quit')?.addEventListener('click', () => {
+    voice.stop()
+    state.screen = 'title'
+    stopLoop()
+    render()
+  })
+
   window.onkeydown = (e) => {
-    if (state.screen !== 'fight' || state.phase !== 'input') return
-    if (e.key === 'Backspace') {
-      e.preventDefault()
-      onBackspace()
-      return
-    }
-    if (e.key === 'Escape') {
+    if (e.key === 'Escape' && state.screen === 'fight') {
+      voice.stop()
       state.screen = 'title'
       stopLoop()
       render()
-      return
-    }
-    if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
-      e.preventDefault()
-      let ch = e.key
-      if (state.mode === 'english') ch = ch.toUpperCase()
-      onChar(ch)
     }
   }
+}
 
-  // Soft focus for mobile when tapping stage/prompt
-  app.addEventListener(
-    'pointerdown',
-    () => {
-      if (state.screen === 'fight') capture?.focus()
-    },
-    { once: true },
-  )
+function updateVoiceHud() {
+  if (state.screen !== 'fight') return
+  const badge = document.querySelector('#mic-badge')
+  if (badge) {
+    const wrap = document.createElement('div')
+    wrap.innerHTML = micBadgeHtml()
+    badge.replaceWith(wrap.firstElementChild!)
+  }
+  const hint = document.querySelector('#stage-hint')
+  if (hint) hint.innerHTML = stageInstruction()
+  const heard = document.querySelector('#heard-line')
+  if (heard) heard.textContent = `聽到：${state.heard || '（尚未辨識）'}`
+  const status = document.querySelector('#status')
+  if (status) status.textContent = state.status
+  const btn = document.querySelector('#btn-mic')
+  if (btn) btn.textContent = state.micStatus === 'listening' ? '🎤 聆聽中' : '🎤 啟用／重啟麥克風'
+
+  const pills = document.querySelectorAll('.stage-pill')
+  if (pills.length >= 2) {
+    pills[0]!.className = `stage-pill ${stage1Passed || state.stage === 2 ? 'done' : state.stage === 1 ? 'current' : ''}`
+    pills[1]!.className = `stage-pill ${state.stage === 2 ? 'current' : stage1Passed ? '' : 'locked'}`
+  }
+}
+
+function tryMatch(transcript: string) {
+  if (state.phase !== 'input' || !state.prompt || !state.mode) return
+  const expected = state.stage === 1 ? state.prompt.stage1 : state.prompt.stage2
+  const ok = matchStage(state.mode, state.stage, transcript, expected)
+  if (!ok) return
+
+  if (state.stage === 1) {
+    stage1Passed = true
+    state.stage = 2
+    state.heard = ''
+    state.status = '階段 1 通過！繼續階段 2'
+    updateVoiceHud()
+    return
+  }
+
+  // Stage 2 pass → attack
+  void resolveSuccess()
 }
 
 function mountLottie() {
@@ -340,7 +399,8 @@ function spawnFloat(cls: string, text: string) {
   setTimeout(() => el.remove(), 800)
 }
 
-function startFight(mode: GameMode) {
+async function startFight(mode: GameMode) {
+  const ok = await voice.ensurePermission()
   state.mode = mode
   state.screen = 'fight'
   state.heroHp = MAX_HP
@@ -349,10 +409,19 @@ function startFight(mode: GameMode) {
   state.deck = createPromptDeck(mode)
   state.deckIndex = 0
   state.result = null
-  state.status = mode === 'zhuyin' ? '注音模式開始！' : '英文模式開始！'
+  state.heard = ''
+  state.status = ok
+    ? mode === 'zhuyin'
+      ? '注音語音模式開始！'
+      : '英文語音模式開始！'
+    : '請點「啟用麥克風」允許權限'
+  voice.setLang(speechLang(mode))
   render()
   nextRound()
   startLoop()
+  if (ok) {
+    voice.start()
+  }
 }
 
 function nextRound() {
@@ -366,75 +435,26 @@ function nextRound() {
   }
   state.round += 1
   state.prompt = state.deck[state.deckIndex++]!
-  state.typed = ''
+  state.stage = 1
+  stage1Passed = false
+  state.heard = ''
   state.phase = 'input'
   state.timeMax = state.prompt.timeMs
   state.timeLeft = state.prompt.timeMs
-  state.status = '輸入招式！'
-  updateFightDomPartial()
-}
-
-/** Avoid full re-render every frame; refresh prompt/keypad when round changes */
-function updateFightDomPartial() {
-  // Full render on round change to refresh keypad highlights
-  const keepPhase = state.phase
+  state.status = '依階段唸出招式！'
   render()
-  state.phase = keepPhase
-}
-
-function onChar(ch: string) {
-  if (state.phase !== 'input' || !state.prompt) return
-  const expected = state.prompt.text[state.typed.length]
-  if (ch === expected) {
-    state.typed += ch
-    refreshPromptChars()
-    if (state.typed === state.prompt.text) {
-      void resolveSuccess()
-    }
-  } else {
-    flashWrong()
-    void resolveFail('打錯了！')
+  // Keep mic running across rounds
+  if (state.micStatus !== 'listening' && state.micStatus !== 'unsupported') {
+    voice.setLang(speechLang(state.mode!))
+    voice.start()
   }
-}
-
-function onBackspace() {
-  if (state.phase !== 'input' || !state.prompt) return
-  if (state.typed.length === 0) return
-  state.typed = state.typed.slice(0, -1)
-  refreshPromptChars()
-}
-
-function refreshPromptChars() {
-  const row = document.querySelector('#prompt-row')
-  const typedLine = document.querySelector('.typed-line')
-  if (!row || !state.prompt) return
-  row.innerHTML = [...state.prompt.text]
-    .map((ch, i) => {
-      let cls = 'prompt-char'
-      if (i < state.typed.length) cls += ' done'
-      else if (i === state.typed.length && state.phase === 'input') cls += ' current'
-      return `<span class="${cls}">${escapeHtml(ch)}</span>`
-    })
-    .join('')
-  if (typedLine) typedLine.textContent = state.typed || '　'
-
-  // Update next-key highlight without full keypad rebuild
-  const next = state.prompt.text[state.typed.length] ?? ''
-  document.querySelectorAll<HTMLButtonElement>('[data-key]').forEach((btn) => {
-    const k = btn.dataset.key!
-    btn.classList.toggle('next', k === next)
-  })
-}
-
-function flashWrong() {
-  const cur = document.querySelector('.prompt-char.current')
-  cur?.classList.add('wrong-flash')
 }
 
 async function resolveSuccess() {
   if (state.phase !== 'input' || !state.prompt) return
   state.phase = 'resolving'
-  state.status = '命中！'
+  state.status = '雙階段通過！命中！'
+  updateVoiceHud()
   const dmg = state.prompt.damage
   state.monsterHp = clamp(state.monsterHp - dmg, 0, MAX_HP)
   playHeroAttackFx()
@@ -451,6 +471,7 @@ async function resolveFail(reason: string) {
   if (state.phase !== 'input') return
   state.phase = 'resolving'
   state.status = reason
+  updateVoiceHud()
   state.heroHp = clamp(state.heroHp - MONSTER_DMG, 0, MAX_HP)
   playMonsterAttackFx()
   updateHpBars()
@@ -477,6 +498,7 @@ function updateHpBars() {
 
 function endFight() {
   stopLoop()
+  voice.stop()
   state.phase = 'idle'
   state.result = state.monsterHp <= 0 ? 'win' : 'lose'
   state.screen = 'result'
@@ -501,7 +523,7 @@ function startLoop() {
         fill.style.transform = `scaleX(${clamp(state.timeLeft / state.timeMax, 0, 1)})`
       }
       if (state.timeLeft <= 0) {
-        void resolveFail('太慢了！')
+        void resolveFail(state.stage === 1 ? '階段 1 逾時！' : '階段 2 逾時！')
       }
     }
     rafId = requestAnimationFrame(tick)

@@ -554,3 +554,173 @@ h1.game-title {
   .key { height: 32px; min-width: 26px; font-size: 0.8rem; }
   .prompt-char { font-size: 1.2rem; }
 }
+
+/* —— Voice combat UI (CHANGE-VOICE-001) —— */
+.voice-panel {
+  gap: 10px;
+}
+
+.mic-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  align-self: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(15, 23, 42, 0.7);
+}
+
+.mic-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #64748b;
+  box-shadow: 0 0 0 0 rgba(100, 116, 139, 0.5);
+}
+
+.mic-badge.mic-on .mic-dot {
+  background: #22c55e;
+  animation: micPulse 1.1s ease infinite;
+}
+
+.mic-badge.mic-warn .mic-dot { background: #f59e0b; }
+.mic-badge.mic-bad .mic-dot { background: #ef4444; }
+.mic-badge.mic-idle .mic-dot { background: #94a3b8; }
+
+.mic-badge.mic-on {
+  color: #bbf7d0;
+  border-color: rgba(34, 197, 94, 0.45);
+}
+.mic-badge.mic-warn { color: #fde68a; }
+.mic-badge.mic-bad { color: #fecaca; }
+.mic-badge.mic-idle { color: #cbd5e1; }
+
+@keyframes micPulse {
+  0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.55); }
+  70% { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+}
+
+.stage-pills {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.stage-pill {
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #94a3b8;
+}
+
+.stage-pill.current {
+  color: #422006;
+  background: linear-gradient(180deg, #fde68a, #f59e0b);
+  border-color: #fbbf24;
+  animation: pulse 0.9s ease infinite;
+}
+
+.stage-pill.done {
+  color: #14532d;
+  background: rgba(124, 252, 0, 0.25);
+  border-color: rgba(124, 252, 0, 0.55);
+}
+
+.stage-pill.locked {
+  opacity: 0.45;
+}
+
+.stage-arrow {
+  color: #64748b;
+  font-weight: 700;
+}
+
+.voice-prompt {
+  flex-direction: column;
+  gap: 4px;
+}
+
+.prompt-primary {
+  font-size: clamp(1.6rem, 6vw, 2.4rem);
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  color: var(--gold);
+}
+
+.prompt-secondary {
+  font-size: clamp(1.3rem, 5vw, 2rem);
+  font-weight: 800;
+  color: #e2e8f0;
+}
+
+.prompt-sep {
+  display: none;
+}
+
+.heard-line {
+  text-align: center;
+  font-size: 0.9rem;
+  color: #a5b4fc;
+  min-height: 1.3em;
+  word-break: break-word;
+  padding: 0 4px;
+}
+
+.voice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+}
+
+.btn-mic {
+  background: linear-gradient(160deg, #818cf8, #4f46e5);
+  color: #eef2ff;
+  box-shadow: 0 8px 24px rgba(79, 70, 229, 0.4);
+  min-width: auto;
+  padding: 10px 16px;
+  font-size: 0.92rem;
+}
+
+.btn-mic:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.warn-inline {
+  color: #fda4af;
+  font-weight: 600;
+}
+
+/* Demote typing keypad — no longer attack method */
+.keypad.demoted {
+  opacity: 0.55;
+  pointer-events: none;
+  padding: 4px 2px 0;
+}
+
+.keypad-note {
+  margin: 0;
+  text-align: center;
+  font-size: 0.75rem;
+  color: #64748b;
+  letter-spacing: 0.04em;
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .voice-actions { gap: 6px; }
+  .btn-mic { padding: 8px 12px; font-size: 0.8rem; }
+  .prompt-primary { font-size: 1.3rem; }
+  .prompt-secondary { font-size: 1.1rem; }
+}

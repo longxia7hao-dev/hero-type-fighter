@@ -1,0 +1,41 @@
+{
+  "changeId": "CHANGE-VOICE-001",
+  "monsterDmgOnFail": 14,
+  "maxHp": 100,
+  "zhuyin": [
+    {"id":"z_zhao","display":"ㄓㄠ","stage1Expect":"ㄓㄠˋ","stage2Expect":"罩","stage1Hints":["zhao4","ㄓㄠ4"],"stage2Hints":["罩！","罩!"],"timeMs":6500,"damage":18},
+    {"id":"z_dao","display":"ㄉㄠ","stage1Expect":"ㄉㄠˋ","stage2Expect":"道","stage1Hints":["dao4"],"stage2Hints":["道！"],"timeMs":6500,"damage":18},
+    {"id":"z_huo","display":"ㄏㄨㄛ","stage1Expect":"ㄏㄨㄛˇ","stage2Expect":"火","stage1Hints":["huo3"],"stage2Hints":["火！"],"timeMs":6500,"damage":18},
+    {"id":"z_shui","display":"ㄕㄨㄟ","stage1Expect":"ㄕㄨㄟˇ","stage2Expect":"水","stage1Hints":["shui3"],"stage2Hints":["水！"],"timeMs":6500,"damage":18},
+    {"id":"z_jian","display":"ㄐㄧㄢ","stage1Expect":"ㄐㄧㄢˋ","stage2Expect":"劍","stage1Hints":["jian4"],"stage2Hints":["劍！"],"timeMs":7000,"damage":20},
+    {"id":"z_dao3","display":"ㄉㄠ","stage1Expect":"ㄉㄠˇ","stage2Expect":"刀","stage1Hints":["dao3"],"stage2Hints":["刀！"],"timeMs":6500,"damage":18},
+    {"id":"z_bao","display":"ㄅㄠ","stage1Expect":"ㄅㄠˋ","stage2Expect":"爆","stage1Hints":["bao4"],"stage2Hints":["爆！"],"timeMs":6500,"damage":18},
+    {"id":"z_lei","display":"ㄌㄟ","stage1Expect":"ㄌㄟˊ","stage2Expect":"雷","stage1Hints":["lei2"],"stage2Hints":["雷！"],"timeMs":6500,"damage":18},
+    {"id":"z_feng","display":"ㄈㄥ","stage1Expect":"ㄈㄥ","stage2Expect":"風","stage1Hints":["feng1","ㄈㄥˉ"],"stage2Hints":["風！"],"timeMs":6000,"damage":16},
+    {"id":"z_guang","display":"ㄍㄨㄤ","stage1Expect":"ㄍㄨㄤ","stage2Expect":"光","stage1Hints":["guang1"],"stage2Hints":["光！"],"timeMs":6000,"damage":16},
+    {"id":"z_hei","display":"ㄏㄟ","stage1Expect":"ㄏㄟ","stage2Expect":"黑","stage1Hints":["hei1"],"stage2Hints":["黑！"],"timeMs":6000,"damage":16},
+    {"id":"z_jue","display":"ㄐㄩ","stage1Expect":"ㄐㄩˊ","stage2Expect":"絕","stage1Hints":["jue2"],"stage2Hints":["絕！"],"timeMs":7000,"damage":20},
+    {"id":"z_zhan","display":"ㄓㄢ","stage1Expect":"ㄓㄢˋ","stage2Expect":"戰","stage1Hints":["zhan4"],"stage2Hints":["戰！"],"timeMs":6500,"damage":18},
+    {"id":"z_kan","display":"ㄎㄚ","stage1Expect":"ㄎㄚˇ","stage2Expect":"砍","stage1Hints":["ka3"],"stage2Hints":["砍！"],"timeMs":6500,"damage":18},
+    {"id":"z_tu","display":"ㄊㄨ","stage1Expect":"ㄊㄨˊ","stage2Expect":"突","stage1Hints":["tu2"],"stage2Hints":["突！"],"timeMs":6500,"damage":18},
+    {"id":"z_sheng","display":"ㄕㄥ","stage1Expect":"ㄕㄥˋ","stage2Expect":"勝","stage1Hints":["sheng4"],"stage2Hints":["勝！"],"timeMs":7000,"damage":22}
+  ],
+  "english": [
+    {"id":"e_apple","display":"A-P-P-L-E","stage1Expect":"A P P L E","stage2Expect":"APPLE","stage1Hints":["ay pee pee el ee"],"stage2Hints":["apple"],"timeMs":8000,"damage":22},
+    {"id":"e_hit","display":"H-I-T","stage1Expect":"H I T","stage2Expect":"HIT","stage1Hints":[],"stage2Hints":["hit"],"timeMs":5500,"damage":14},
+    {"id":"e_fire","display":"F-I-R-E","stage1Expect":"F I R E","stage2Expect":"FIRE","stage1Hints":[],"stage2Hints":["fire"],"timeMs":6500,"damage":16},
+    {"id":"e_slash","display":"S-L-A-S-H","stage1Expect":"S L A S H","stage2Expect":"SLASH","stage1Hints":[],"stage2Hints":["slash"],"timeMs":7500,"damage":18},
+    {"id":"e_hero","display":"H-E-R-O","stage1Expect":"H E R O","stage2Expect":"HERO","stage1Hints":[],"stage2Hints":["hero"],"timeMs":6500,"damage":16},
+    {"id":"e_sword","display":"S-W-O-R-D","stage1Expect":"S W O R D","stage2Expect":"SWORD","stage1Hints":[],"stage2Hints":["sword"],"timeMs":7500,"damage":18},
+    {"id":"e_magic","display":"M-A-G-I-C","stage1Expect":"M A G I C","stage2Expect":"MAGIC","stage1Hints":[],"stage2Hints":["magic"],"timeMs":7500,"damage":18},
+    {"id":"e_attack","display":"A-T-T-A-C-K","stage1Expect":"A T T A C K","stage2Expect":"ATTACK","stage1Hints":[],"stage2Hints":["attack"],"timeMs":8000,"damage":22},
+    {"id":"e_combo","display":"C-O-M-B-O","stage1Expect":"C O M B O","stage2Expect":"COMBO","stage1Hints":[],"stage2Hints":["combo"],"timeMs":7000,"damage":18},
+    {"id":"e_power","display":"P-O-W-E-R","stage1Expect":"P O W E R","stage2Expect":"POWER","stage1Hints":[],"stage2Hints":["power"],"timeMs":7000,"damage":18},
+    {"id":"e_fast","display":"F-A-S-T","stage1Expect":"F A S T","stage2Expect":"FAST","stage1Hints":[],"stage2Hints":["fast"],"timeMs":6000,"damage":15},
+    {"id":"e_win","display":"W-I-N","stage1Expect":"W I N","stage2Expect":"WIN","stage1Hints":[],"stage2Hints":["win"],"timeMs":5500,"damage":14},
+    {"id":"e_guard","display":"G-U-A-R-D","stage1Expect":"G U A R D","stage2Expect":"GUARD","stage1Hints":[],"stage2Hints":["guard"],"timeMs":7000,"damage":18},
+    {"id":"e_smash","display":"S-M-A-S-H","stage1Expect":"S M A S H","stage2Expect":"SMASH","stage1Hints":[],"stage2Hints":["smash"],"timeMs":7000,"damage":18},
+    {"id":"e_brave","display":"B-R-A-V-E","stage1Expect":"B R A V E","stage2Expect":"BRAVE","stage1Hints":[],"stage2Hints":["brave"],"timeMs":7500,"damage":20},
+    {"id":"e_fight","display":"F-I-G-H-T","stage1Expect":"F I G H T","stage2Expect":"FIGHT","stage1Hints":[],"stage2Hints":["fight"],"timeMs":7000,"damage":18}
+  ]
+}
