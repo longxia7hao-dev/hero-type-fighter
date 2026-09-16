@@ -1,0 +1,148 @@
+/* Direct art pass — night-purple castle skin. No bot. */
+html, body, #app {
+  background-color: #070414 !important;
+}
+
+#app {
+  position: relative;
+  isolation: isolate;
+}
+
+#app::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% 108%, #1a0a3a 0%, transparent 55%),
+    radial-gradient(circle at 12% 18%, rgba(180, 140, 255, 0.18), transparent 22%),
+    radial-gradient(circle at 82% 12%, rgba(255, 215, 106, 0.12), transparent 18%),
+    linear-gradient(180deg, #0b0620 0%, #160b36 42%, #2a1248 70%, #0e081c 100%);
+}
+
+#app::after {
+  content: "";
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: min(38vh, 280px);
+  z-index: 0;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 280' preserveAspectRatio='xMidYEnd meet'><defs><linearGradient id='n' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='%231a1038'/><stop offset='1' stop-color='%23080514'/></linearGradient></defs><path fill='%23140c2c' d='M0 280 L0 168 L40 168 L40 110 L70 90 L100 110 L100 80 L130 55 L160 80 L160 168 L210 168 L210 120 L250 95 L290 120 L290 168 L360 168 L360 70 L400 40 L440 70 L440 168 L520 168 L520 100 L560 70 L600 100 L600 50 L640 20 L680 50 L680 168 L760 168 L760 88 L820 88 L820 60 L850 40 L880 60 L880 88 L940 88 L940 168 L1000 168 L1000 120 L1040 96 L1080 120 L1080 168 L1200 168 L1200 280 Z'/><path fill='%230d081c' opacity='0.85' d='M0 280 L0 200 L80 200 L80 150 L140 150 L140 200 L280 200 L280 140 L360 140 L360 200 L500 200 L500 130 L620 130 L620 200 L780 200 L780 145 L900 145 L900 200 L1200 200 L1200 280 Z'/><circle cx='980' cy='48' r='18' fill='%23ffe7a0' opacity='0.85'/><circle cx='968' cy='48' r='18' fill='%230b0620'/></svg>");
+  background-repeat: no-repeat;
+  background-position: bottom center;
+  background-size: 100% auto;
+  opacity: 0.95;
+}
+
+.screen {
+  position: relative;
+  z-index: 1;
+}
+
+.title-screen,
+.select-screen,
+.shop-screen,
+.result-screen {
+  background: transparent !important;
+}
+
+.howto,
+.job-card,
+.shop-card,
+.prompt-panel,
+.panel-head,
+.result-screen .mode-row {
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  background: linear-gradient(165deg, rgba(36, 18, 72, 0.78), rgba(10, 6, 28, 0.82)) !important;
+  border: 1.5px solid rgba(255, 215, 106, 0.38) !important;
+  box-shadow:
+    0 10px 36px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 230, 160, 0.12);
+}
+
+.job-portrait {
+  overflow: hidden;
+  border-radius: 14px !important;
+  border: 1px solid rgba(255, 215, 106, 0.35);
+  background:
+    radial-gradient(circle at 50% 20%, rgba(255, 215, 106, 0.16), transparent 55%),
+    linear-gradient(180deg, #2a1658, #0c0818);
+  min-height: 132px;
+}
+
+.job-portrait img,
+.portrait,
+.portrait-select,
+.portrait-fight {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center bottom;
+  border-radius: 0 !important;
+  background: transparent;
+}
+
+.stage {
+  background:
+    linear-gradient(180deg, rgba(8, 4, 20, 0.15) 0%, rgba(8, 4, 20, 0.05) 40%, rgba(8, 4, 20, 0.55) 100%),
+    radial-gradient(ellipse at 50% 0%, rgba(90, 50, 160, 0.35), transparent 55%),
+    linear-gradient(180deg, #1a0b3c 0%, #2b1252 48%, #1a1028 100%) !important;
+  border: 1.5px solid rgba(255, 215, 106, 0.28) !important;
+  box-shadow: inset 0 0 60px rgba(80, 30, 140, 0.25);
+}
+
+.stage-ground {
+  height: 32% !important;
+  background:
+    linear-gradient(180deg, transparent, rgba(20, 10, 8, 0.35)),
+    repeating-linear-gradient(90deg, #3a2418 0 14px, #2a1810 14px 28px),
+    #2c1a12 !important;
+  opacity: 1 !important;
+  box-shadow: 0 -12px 24px rgba(0, 0, 0, 0.35);
+}
+
+.stage-ground::after {
+  content: "";
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  bottom: 18%;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(40, 20, 10, 0.35);
+  filter: blur(6px);
+}
+
+.fighter.portrait-wrap {
+  width: clamp(96px, 24vw, 168px) !important;
+  height: clamp(140px, 38vw, 220px) !important;
+  bottom: 16% !important;
+}
+
+.fighter.portrait-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 10px 14px rgba(0, 0, 0, 0.55));
+}
+
+.btn-ghost {
+  border-color: rgba(255, 215, 106, 0.35) !important;
+  color: #f3e7c0 !important;
+  background: rgba(20, 10, 40, 0.45) !important;
+}
+
+.act-btn {
+  border: 1px solid rgba(255, 215, 106, 0.3);
+  background: linear-gradient(180deg, rgba(48, 24, 90, 0.9), rgba(16, 8, 36, 0.95));
+  color: #f8f0d8;
+}
+
+.act-btn.skill {
+  background: linear-gradient(180deg, #5b3dff, #2a1678);
+  border-color: rgba(180, 160, 255, 0.45);
+}
