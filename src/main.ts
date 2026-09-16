@@ -231,7 +231,7 @@ const JOB_ART: Record<JobId, string> = {
   mage: 'hero-mage.png',
   rogue: 'hero-rogue.png',
 }
-const MONSTER_ART = 'monster.svg'
+const MONSTER_ART = 'monster.png'
 
 function portraitImg(file: string, alt: string, cls = ''): string {
   return `<img class="portrait ${cls}" src="${ART_BASE}${file}" alt="${escapeHtml(alt)}" draggable="false" loading="eager" />`
