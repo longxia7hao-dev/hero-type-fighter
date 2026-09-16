@@ -99,7 +99,7 @@ export class VoiceRecognizer {
     const rec = new Ctor()
     rec.continuous = true
     rec.interimResults = true
-    rec.maxAlternatives = 3
+    rec.maxAlternatives = 5
     rec.lang = this.lang
 
     rec.onstart = () => {
@@ -118,7 +118,8 @@ export class VoiceRecognizer {
           const t = res[a]?.transcript
           if (t) alts.push(t)
         }
-        const joined = alts.join(' | ')
+        // VOICE-003: space-join alts so match can try each; avoid "a | b" pipes
+        const joined = (alts.length ? [...new Set(alts)] : [alt]).filter(Boolean).join(' ')
         if (res.isFinal) finalText += (finalText ? ' ' : '') + (joined || alt)
         else interim += alt
       }
@@ -143,9 +144,10 @@ export class VoiceRecognizer {
       this.active = false
       if (this.shouldRun) {
         // Safari / Chrome often end after one utterance — auto-restart
+        // VOICE-003: quicker re-arm after Chrome/Safari drops the session
         this.restartTimer = window.setTimeout(() => {
           if (this.shouldRun) this.begin()
-        }, 280)
+        }, 120)
       } else {
         this.callbacks.onStatus('idle')
       }

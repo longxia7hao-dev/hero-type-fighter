@@ -6,7 +6,7 @@ import {
   createPromptDeck,
   speechLang,
 } from './prompts'
-import { matchStage } from './match'
+import { matchStage, nearMissHint } from './match'
 import { VoiceRecognizer, isSpeechSupported, type SpeechStatus } from './speech'
 import {
   MAX_HP,
@@ -658,11 +658,16 @@ async function tryMatch(transcript: string, isFinal = true) {
   const expected = state.stage === 1 ? state.prompt.stage1 : state.prompt.stage2
   const ok = matchStage(state.mode, state.stage, transcript, expected)
   if (!ok) {
-    // CHANGE-VOICE-003 heard feedback — do not change match.ts loosen logic here
     if (isFinal && transcript.trim()) {
       const target =
         state.stage === 1 ? state.prompt.displayPrimary : state.prompt.displaySecondary
-      state.status = `聽到「${transcript.trim()}」尚未對上 → 再試「${target}」`
+      state.status = nearMissHint(
+        state.mode,
+        state.stage,
+        transcript,
+        expected,
+        target,
+      )
       updateVoiceHud()
     }
     return
