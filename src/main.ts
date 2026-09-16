@@ -5,6 +5,10 @@ document.documentElement.style.setProperty(
   '--castle-bg',
   `url(${import.meta.env.BASE_URL}art/bg-castle.png)`,
 )
+document.documentElement.style.setProperty(
+  '--battle-bg',
+  `url(${import.meta.env.BASE_URL}art/bg-battle.png)`,
+)
 
 import lottie, { type AnimationItem } from 'lottie-web'
 import {
