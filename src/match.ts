@@ -210,39 +210,42 @@ function cjkHit(transcript: string, expected: string[]): boolean {
   return false
 }
 
+/**
+ * CHANGE-VOICE-002b: Stage 1 is 音對 (sound match).
+ * Tone orthography from STT is not required — zhuyin/pinyin/CJK variants of the
+ * same syllable/initial sound all pass. Stage 2 still requires the target character.
+ */
 export function matchZhuyinStage1(transcript: string, expected: string[]): boolean {
   const t = normalizeZhuyinTones(normalizeRaw(transcript))
   const tNoSpace = t.replace(/\s+/g, '')
+  const tBase = stripZhuyinTones(tNoSpace)
+  const tp = normalizePinyin(t)
+  const tpBase = tp.replace(/[1-5]$/, '')
 
   for (const exp of expected) {
     const e = normalizeZhuyinTones(normalizeRaw(exp))
     const eNoSpace = e.replace(/\s+/g, '')
-
-    // Exact / contains zhuyin with tone
-    if (tNoSpace.includes(eNoSpace) || eNoSpace.includes(tNoSpace)) return true
-
-    // Zhuyin base without tone (only if expected has no tone OR first tone)
-    const tBase = stripZhuyinTones(tNoSpace)
     const eBase = stripZhuyinTones(eNoSpace)
-    if (/[\u3105-\u3129]/.test(eBase) && tBase === eBase) {
-      // Accept toneless STT if expected is first tone or listed without tone mark
-      if (!/[ˊˇˋ˙]/.test(e) || /ˉ/.test(e)) return true
+
+    // Exact / contains (with or without tone marks)
+    if (tNoSpace.includes(eNoSpace) || eNoSpace.includes(tNoSpace)) return true
+    if (eBase && (tBase.includes(eBase) || eBase.includes(tBase))) {
+      if (/[\u3105-\u3129]/.test(eBase) || /[\u3105-\u3129]/.test(tBase)) return true
     }
 
-    // Pinyin + tone number
-    const tp = normalizePinyin(t)
-    const ep = normalizePinyin(e)
-    if (ep && (tp === ep || tp.includes(ep) || fuzzyEqual(tp, ep, 1))) return true
+    // 音對: toneless zhuyin base equality (any tone OK)
+    if (/[\u3105-\u3129]/.test(eBase) && tBase === eBase) return true
 
-    // Allow tone-less pinyin match when expected ends with 1 (first tone)
-    if (ep.endsWith('1')) {
-      const epBase = ep.slice(0, -1)
-      const tpBase = tp.replace(/[1-5]$/, '')
-      if (tpBase === epBase) return true
+    // Pinyin with tone, or 音對 toneless base
+    const ep = normalizePinyin(e)
+    const epBase = ep.replace(/[1-5]$/, '')
+    if (ep && (tp === ep || tp.includes(ep) || fuzzyEqual(tp, ep, 1))) return true
+    if (epBase && tpBase && (tpBase === epBase || fuzzyEqual(tpBase, epBase, epBase.length <= 2 ? 0 : 1))) {
+      return true
     }
   }
 
-  // Spoken Chinese of that syllable (STT often returns the character)
+  // Spoken Chinese of that syllable / teaching character (STT often returns CJK)
   if (cjkHit(t, expected)) return true
 
   return false

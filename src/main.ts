@@ -11,6 +11,8 @@ import { VoiceRecognizer, isSpeechSupported, type SpeechStatus } from './speech'
 
 const MAX_HP = 100
 const MONSTER_DMG = 14
+/** Brief green-lamp hold after a stage is accepted (ms) */
+const STAGE_OK_HOLD_MS = 450
 
 type Screen = 'title' | 'fight' | 'result'
 type StageNum = 1 | 2
@@ -114,7 +116,7 @@ function stageInstruction(): string {
   if (!state.prompt || !state.mode) return ''
   if (state.mode === 'zhuyin') {
     return state.stage === 1
-      ? `階段 1／2：唸出帶調注音（例：${escapeHtml(state.prompt.stage1[0] ?? '')} 或 ${escapeHtml(state.prompt.hint ?? '')}）`
+      ? `階段 1／2：唸出注音「音」（例：${escapeHtml(state.prompt.displayPrimary)}／${escapeHtml(state.prompt.hint ?? '')}）— 音對即可`
       : `階段 2／2：說出漢字「${escapeHtml(state.prompt.displaySecondary)}」`
   }
   return state.stage === 1
@@ -137,7 +139,7 @@ function render() {
         <div class="howto">
           <strong>怎麼玩（語音）</strong><br/>
           · 允許麥克風後開戰；畫面會顯示<strong>聆聽中</strong><br/>
-          · <strong>注音版</strong>：先唸帶調注音／拼音，再唸漢字<br/>
+          · <strong>注音版</strong>：先唸注音「音」（音對即可，如 ㄐ），再唸漢字（如「雞」）<br/>
           · <strong>英文版</strong>：先逐字母拼出，再說出單字<br/>
           · 兩階段都過 → 勇者攻擊；失敗／逾時 → 魔物反擊<br/>
           · 打滿<strong>對方</strong>血條即勝
@@ -236,9 +238,9 @@ function render() {
           <span class="stage-pill ${stage2Cls}">Stage 2</span>
         </div>
         <div class="prompt-row voice-prompt" id="prompt-row">
-          <span class="prompt-primary">${p ? escapeHtml(p.displayPrimary) : ''}</span>
+          <span class="prompt-primary" id="prompt-primary">${p ? escapeHtml(p.displayPrimary) : ''}</span>
           <span class="prompt-sep">·</span>
-          <span class="prompt-secondary">${p ? escapeHtml(p.displaySecondary) : ''}</span>
+          <span class="prompt-secondary" id="prompt-secondary">${p ? escapeHtml(p.displaySecondary) : ''}</span>
         </div>
         <div class="prompt-hint" id="stage-hint">${stageInstruction()}</div>
         <div class="heard-line" id="heard-line">聽到：${escapeHtml(state.heard) || '（尚未辨識）'}</div>
@@ -315,22 +317,43 @@ function updateVoiceHud() {
   }
 }
 
-function tryMatch(transcript: string) {
+function lightPromptTarget(which: 'primary' | 'secondary') {
+  const el = document.querySelector(
+    which === 'primary' ? '#prompt-primary' : '#prompt-secondary',
+  )
+  el?.classList.add('lit-ok', 'pass')
+}
+
+async function tryMatch(transcript: string) {
   if (state.phase !== 'input' || !state.prompt || !state.mode) return
   const expected = state.stage === 1 ? state.prompt.stage1 : state.prompt.stage2
   const ok = matchStage(state.mode, state.stage, transcript, expected)
   if (!ok) return
 
+  // Lock input so rematch / timer cannot race during the green hold
+  state.phase = 'resolving'
+
   if (state.stage === 1) {
     stage1Passed = true
-    state.stage = 2
     state.heard = ''
-    state.status = '階段 1 通過！繼續階段 2'
+    state.status = '① 綠燈！這段音對了'
+    lightPromptTarget('primary')
+    updateVoiceHud()
+    await wait(STAGE_OK_HOLD_MS)
+    if (state.screen !== 'fight' || !state.prompt) return
+    state.stage = 2
+    state.status = '① 綠燈已亮 → 繼續唸第 ② 段'
+    state.phase = 'input'
     updateVoiceHud()
     return
   }
 
-  // Stage 2 pass → attack
+  // Stage 2 pass → green lamp, then attack
+  state.status = '② 綠燈！出招'
+  lightPromptTarget('secondary')
+  updateVoiceHud()
+  await wait(STAGE_OK_HOLD_MS)
+  if (state.screen !== 'fight' || !state.prompt) return
   void resolveSuccess()
 }
 
@@ -451,7 +474,9 @@ function nextRound() {
 }
 
 async function resolveSuccess() {
-  if (state.phase !== 'input' || !state.prompt) return
+  if (!state.prompt) return
+  // May already be 'resolving' after stage-2 green hold
+  if (state.phase !== 'input' && state.phase !== 'resolving') return
   state.phase = 'resolving'
   state.status = '雙階段通過！命中！'
   updateVoiceHud()
