@@ -1,0 +1,20 @@
+{
+  "name": "hero-type-fighter",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "勇者拼音快打 — 注音／英文打字格鬥 Prototype",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "deploy:pages": "VITE_BASE=/hero-type-fighter/ npm run build && echo 'Deploy dist/ to gh-pages branch'"
+  },
+  "devDependencies": {
+    "typescript": "~5.8.0",
+    "vite": "^6.2.0"
+  },
+  "dependencies": {
+    "lottie-web": "^5.13.0"
+  }
+}
