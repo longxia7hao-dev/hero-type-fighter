@@ -115,6 +115,7 @@ var dt=Object.defineProperty;var mt=(t,e,r)=>e in t?dt(t,e,{enumerable:!0,config
       </div>
 
       <div class="stage" id="stage">
+        <img class="stage-bg" src="/hero-type-fighter/art/bg-battle.png" alt="" aria-hidden="true" />
         <div class="stage-ground"></div>
         ${chibiHeroHtml()}
         ${chibiMonsterHtml()}
