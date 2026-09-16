@@ -223,6 +223,20 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;')
 }
 
+/** ART-IMAGINE-001 — public/art portraits (do not touch voice match) */
+const ART_BASE = `${import.meta.env.BASE_URL}art/`
+const JOB_ART: Record<JobId, string> = {
+  swordsman: 'hero-swordsman.jpg',
+  paladin: 'hero-paladin.svg',
+  mage: 'hero-mage.png',
+  rogue: 'hero-rogue.png',
+}
+const MONSTER_ART = 'monster.svg'
+
+function portraitImg(file: string, alt: string, cls = ''): string {
+  return `<img class="portrait ${cls}" src="${ART_BASE}${file}" alt="${escapeHtml(alt)}" draggable="false" loading="eager" />`
+}
+
 function job() {
   return state.jobId ? getJob(state.jobId) : null
 }
@@ -256,25 +270,18 @@ function stageInstruction(): string {
 function chibiHeroHtml(): string {
   const j = job()
   const cls = j?.cssClass ?? 'job-swordsman'
-  const cue = j?.weaponCue ?? '⚔️'
+  const id = (j?.id ?? 'swordsman') as JobId
+  const file = JOB_ART[id]
   return `
-    <div class="fighter hero chibi ${cls}" id="hero">
-      <div class="body">
-        <div class="chibi-head"><span class="chibi-face">◡̈</span></div>
-        <div class="chibi-torso"></div>
-        <div class="chibi-weapon" aria-hidden="true">${cue}</div>
-      </div>
+    <div class="fighter hero portrait-wrap ${cls}" id="hero">
+      ${portraitImg(file, j?.name ?? '勇者', 'portrait-fight')}
     </div>`
 }
 
 function chibiMonsterHtml(): string {
   return `
-    <div class="fighter monster chibi" id="monster">
-      <div class="body">
-        <div class="chibi-head mon-head"><span class="chibi-face">◣_◢</span></div>
-        <div class="chibi-torso mon-torso"></div>
-        <div class="chibi-weapon mon-weapon" aria-hidden="true">🪓</div>
-      </div>
+    <div class="fighter monster portrait-wrap" id="monster">
+      ${portraitImg(MONSTER_ART, '魔物', 'portrait-fight')}
     </div>`
 }
 
@@ -327,10 +334,8 @@ function render() {
           ${JOBS.map(
             (j) => `
             <button type="button" class="job-card ${j.cssClass}" data-job="${j.id}">
-              <div class="job-chibi ${j.cssClass}">
-                <div class="chibi-head"><span class="chibi-face">◡̈</span></div>
-                <div class="chibi-torso"></div>
-                <div class="chibi-weapon">${j.weaponCue}</div>
+              <div class="job-portrait ${j.cssClass}">
+                ${portraitImg(JOB_ART[j.id], j.name, 'portrait-select')}
               </div>
               <div class="job-name">${escapeHtml(j.name)}</div>
               <div class="job-blurb">${escapeHtml(j.blurb)}</div>
