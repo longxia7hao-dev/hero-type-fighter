@@ -27,6 +27,98 @@ import {
 
 /** Brief green-lamp hold after a stage is accepted (ms) */
 const STAGE_OK_HOLD_MS = 450
+/** Long-press duration on title for QA simulate-win (ms) */
+const QA_TITLE_HOLD_MS = 1200
+
+function resetAdventureSession() {
+  state.mode = null
+  state.jobId = null
+  state.gold = START_GOLD
+  state.inventory = emptyInventory()
+  state.heroHp = MAX_HP
+  state.monsterHp = MAX_HP
+  state.round = 1
+  state.deck = []
+  state.deckIndex = 0
+  state.prompt = null
+  state.stage = 1
+  state.phase = 'idle'
+  state.timeLeft = 0
+  state.timeMax = 0
+  state.result = null
+  state.lastWinGold = 0
+  state.skillLeft = 0
+  state.blockCharges = 0
+  state.dodgeCharges = 0
+  state.firstStrikeDone = false
+  state.heard = ''
+  state.status = ''
+  stage1Passed = false
+}
+
+function goTitleFresh() {
+  voice.stop()
+  stopLoop()
+  window.onkeydown = null
+  resetAdventureSession()
+  state.screen = 'title'
+  render()
+}
+
+function typeFallbackPlaceholder(): string {
+  if (!state.prompt) return '打字 fallback：輸入答案後送出'
+  const expected =
+    state.stage === 1
+      ? (state.prompt.stage1[0] ?? state.prompt.displayPrimary)
+      : (state.prompt.stage2[0] ?? state.prompt.displaySecondary)
+  const label = state.stage === 1 ? '階段①' : '階段②'
+  return `${label} 可打：${expected}`
+}
+
+/** QA / no-mic: force win → gold → result (shop reachable). Voice core untouched. */
+function simulateQaVictory() {
+  if (!state.mode) state.mode = 'zhuyin'
+  if (!state.jobId) state.jobId = 'swordsman'
+  voice.stop()
+  stopLoop()
+  window.onkeydown = null
+  const awardRound = Math.max(1, state.round || 1)
+  state.monsterHp = 0
+  if (state.heroHp <= 0) state.heroHp = 1
+  state.phase = 'idle'
+  state.result = 'win'
+  state.lastWinGold = winGold(awardRound)
+  state.gold += state.lastWinGold
+  state.status = '【測試】模擬勝利'
+  state.screen = 'result'
+  render()
+}
+
+function wireTitleLongPressQa() {
+  const el = document.querySelector<HTMLElement>('.game-title')
+  if (!el) return
+  let timer: number | null = null
+  const clear = () => {
+    if (timer != null) {
+      window.clearTimeout(timer)
+      timer = null
+    }
+  }
+  const start = (e: PointerEvent) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return
+    clear()
+    timer = window.setTimeout(() => {
+      timer = null
+      simulateQaVictory()
+    }, QA_TITLE_HOLD_MS)
+  }
+  el.addEventListener('pointerdown', start)
+  el.addEventListener('pointerup', clear)
+  el.addEventListener('pointerleave', clear)
+  el.addEventListener('pointercancel', clear)
+  el.setAttribute('title', '長按 1.2 秒＝品管模擬勝利（測試）')
+}
+
 
 type Screen = 'title' | 'select' | 'shop' | 'fight' | 'result'
 type StageNum = 1 | 2
@@ -202,7 +294,8 @@ function render() {
           · 選模式 → 選職業 → 商店（可跳過）→ 戰鬥<br/>
           · <strong>注音</strong>：先唸「音」，再唸漢字 · <strong>英文</strong>：先拼字母，再說單字<br/>
           · 兩階段綠燈 → 攻擊；失敗／逾時 → 魔物反擊（可用技能／道具）<br/>
-          · 語音不可用時可用下方<strong>打字 fallback</strong>
+          · 語音不可用時可在戰鬥畫面用<strong>打字 fallback</strong>（輸入框會提示當前答案）<br/>
+          · <strong>品管／無麥</strong>：長按標題 1.2 秒 → 模擬勝利（金幣→可回商店）
           ${
             speechOk
               ? ''
@@ -215,11 +308,10 @@ function render() {
       btn.addEventListener('click', () => {
         state.mode = btn.dataset.mode as GameMode
         state.screen = 'select'
-        // Fresh adventure session gold if coming from title cold
-        if (state.gold < 0) state.gold = START_GOLD
         render()
       })
     })
+    wireTitleLongPressQa()
     return
   }
 
@@ -360,10 +452,7 @@ function render() {
       render()
     })
     app.querySelector('[data-title]')!.addEventListener('click', () => {
-      state.screen = 'title'
-      stopLoop()
-      voice.stop()
-      render()
+      goTitleFresh()
     })
     return
   }
@@ -431,7 +520,7 @@ function render() {
         <div class="heard-line" id="heard-line">聽到：${escapeHtml(state.heard) || '（尚未辨識）'}</div>
         <div class="status-toast" id="status">${escapeHtml(state.status)}</div>
         <form class="type-fallback" id="type-form">
-          <input type="text" id="type-input" class="type-input" placeholder="打字 fallback：輸入答案後送出" autocomplete="off" enterkeyhint="done" />
+          <input type="text" id="type-input" class="type-input" placeholder="${escapeHtml(typeFallbackPlaceholder())}" autocomplete="off" enterkeyhint="done" />
           <button type="submit" class="btn btn-ghost" id="btn-type">送出</button>
         </form>
         <div class="voice-actions">
@@ -462,10 +551,7 @@ function wireFightControls() {
   })
 
   document.querySelector('#btn-quit')?.addEventListener('click', () => {
-    voice.stop()
-    state.screen = 'title'
-    stopLoop()
-    render()
+    goTitleFresh()
   })
 
   document.querySelector('#type-form')?.addEventListener('submit', (e) => {
@@ -492,10 +578,7 @@ function wireFightControls() {
 
   window.onkeydown = (e) => {
     if (e.key === 'Escape' && state.screen === 'fight') {
-      voice.stop()
-      state.screen = 'title'
-      stopLoop()
-      render()
+      goTitleFresh()
     }
   }
 }
@@ -541,6 +624,8 @@ function updateVoiceHud() {
   if (status) status.textContent = state.status
   const btn = document.querySelector('#btn-mic')
   if (btn) btn.textContent = state.micStatus === 'listening' ? '🎤 聆聽中' : '🎤 啟用／重啟麥克風'
+  const typeIn = document.querySelector<HTMLInputElement>('#type-input')
+  if (typeIn) typeIn.placeholder = typeFallbackPlaceholder()
 
   const pills = document.querySelectorAll('.stage-pill')
   if (pills.length >= 2) {
