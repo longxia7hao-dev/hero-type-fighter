@@ -1,0 +1,123 @@
+{
+  "changeId": "RPG-001",
+  "brief": "BRIEF-RPG-001",
+  "maxHp": 100,
+  "monsterDmgOnFail": 14,
+  "startGold": 40,
+  "winGold": {
+    "base": 35,
+    "perWinsBonusFloorDiv": 2
+  },
+  "classes": [
+    {
+      "id": "swordsman",
+      "name": "劍士",
+      "colorCue": "青綠＋長劍",
+      "passive": {
+        "damageMult": 1.35
+      },
+      "skill": {
+        "id": "armor_break",
+        "name": "破甲斬",
+        "blurb": "揮出一記重斬，立刻打魔物。",
+        "effect": {
+          "type": "damage",
+          "amount": 22
+        },
+        "usesPerBattle": 1
+      }
+    },
+    {
+      "id": "paladin",
+      "name": "聖騎士",
+      "colorCue": "金白＋盾",
+      "passive": {},
+      "skill": {
+        "id": "holy_shield",
+        "name": "聖盾",
+        "blurb": "舉起聖盾，擋掉下一次挨打。",
+        "effect": {
+          "type": "block_next_hit",
+          "charges": 1
+        },
+        "usesPerBattle": 1
+      }
+    },
+    {
+      "id": "mage",
+      "name": "法師",
+      "colorCue": "夜紫＋杖",
+      "passive": {},
+      "skill": {
+        "id": "time_stretch",
+        "name": "時光延展",
+        "blurb": "延展時光，這題多給幾秒念。",
+        "effect": {
+          "type": "add_time_ms",
+          "amount": 5000
+        },
+        "usesPerBattle": 2
+      }
+    },
+    {
+      "id": "rogue",
+      "name": "盜賊",
+      "colorCue": "暗綠＋短刀",
+      "passive": {
+        "battleStartDamage": 12
+      },
+      "skill": {
+        "id": "shadow_dodge",
+        "name": "影遁",
+        "blurb": "躲進影子，下次念錯也不掉血。",
+        "effect": {
+          "type": "ignore_next_fail",
+          "charges": 1
+        },
+        "usesPerBattle": 1
+      }
+    }
+  ],
+  "items": [
+    {
+      "id": "scroll",
+      "name": "直接攻擊卷",
+      "price": 25,
+      "blurb": "念咒傷人，立刻砍一刀。",
+      "effect": {
+        "type": "damage",
+        "amount": 28
+      }
+    },
+    {
+      "id": "hourglass",
+      "name": "沙漏",
+      "price": 15,
+      "blurb": "多搶幾秒把音念完。",
+      "effect": {
+        "type": "add_time_ms",
+        "amount": 4000
+      }
+    },
+    {
+      "id": "amulet",
+      "name": "護符",
+      "price": 20,
+      "blurb": "擋一次打，可跟聖盾疊層。",
+      "effect": {
+        "type": "block_next_hit",
+        "charges": 1
+      }
+    },
+    {
+      "id": "potion",
+      "name": "回復藥",
+      "price": 18,
+      "blurb": "灌一口，血回來。",
+      "effect": {
+        "type": "heal",
+        "amount": 35
+      }
+    }
+  ]
+}

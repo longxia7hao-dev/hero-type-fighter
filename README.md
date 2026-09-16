@@ -1,31 +1,29 @@
 # 勇者拼音快打（Hero Type Fighter）
 
-2D 側視**語音**格鬥 Prototype：勇者（左）對魔物（右）。兩階段語音都通過 → 勇者攻擊；失敗或逾時 → 魔物反擊。
+日系 Q 版 JRPG 冒險殼 + **語音／打字兩階段戰鬥核**：選職業 → 商店 → 戰鬥 → 勝利領金 → 可回商店再戰。
 
-> CHANGE-VOICE-001：戰鬥改為麥克風語音，螢幕打字鍵盤已降級停用。
+> BRIEF-RPG-001：選角／商店／技能道具。語音引擎（`speech.ts`）不重寫。
 
-## 模式
+## 流程
 
-1. **注音語音版**（`zh-TW`）：顯示注音基底 + 漢字。先唸帶調音節，再唸漢字。
-2. **英文語音版**（`en-US`）：顯示 `A-P-P-L-E` + `APPLE`。先拼字母，再說單字。
+1. 選注音／英文模式  
+2. 選職業（劍士／聖騎士／法師／盜賊）  
+3. 商店購買道具（可跳過）  
+4. 戰鬥：兩階段綠燈 → 攻擊；失敗／逾時 → 魔物反擊（技能／道具可擋或閃）  
+5. 勝利獲得金幣，可回商店或再戰  
 
-## 本機預覽
+## 本機
 
 ```bash
-cd hero-type-fighter
 npm install
 npm run dev
 ```
 
-建置（GitHub Pages base）：
+建置（GitHub Pages）：
 
 ```bash
 VITE_BASE=/hero-type-fighter/ npm run build
 ```
-
-## 技術
-
-Vite + TypeScript + Web Speech API + 可選 Lottie 斬擊。
 
 ## Pages
 

@@ -8,18 +8,35 @@ import {
 } from './prompts'
 import { matchStage } from './match'
 import { VoiceRecognizer, isSpeechSupported, type SpeechStatus } from './speech'
+import {
+  MAX_HP,
+  MONSTER_DMG,
+  START_GOLD,
+  JOBS,
+  ITEMS,
+  SKILL_FLAT,
+  MAGE_TIME_BONUS_MS,
+  type JobId,
+  type ItemId,
+  type Inventory,
+  emptyInventory,
+  getJob,
+  getItem,
+  winGold,
+} from './rpg'
 
-const MAX_HP = 100
-const MONSTER_DMG = 14
 /** Brief green-lamp hold after a stage is accepted (ms) */
 const STAGE_OK_HOLD_MS = 450
 
-type Screen = 'title' | 'fight' | 'result'
+type Screen = 'title' | 'select' | 'shop' | 'fight' | 'result'
 type StageNum = 1 | 2
 
 interface State {
   screen: Screen
   mode: GameMode | null
+  jobId: JobId | null
+  gold: number
+  inventory: Inventory
   heroHp: number
   monsterHp: number
   round: number
@@ -31,15 +48,26 @@ interface State {
   timeLeft: number
   timeMax: number
   result: 'win' | 'lose' | null
+  lastWinGold: number
   status: string
   heard: string
   micStatus: SpeechStatus
   micDetail: string
+  /** Remaining skill uses this battle */
+  skillLeft: number
+  /** Block charges (paladin skill + amulet) */
+  blockCharges: number
+  /** Rogue dodge next fail */
+  dodgeCharges: number
+  firstStrikeDone: boolean
 }
 
 const state: State = {
   screen: 'title',
   mode: null,
+  jobId: null,
+  gold: START_GOLD,
+  inventory: emptyInventory(),
   heroHp: MAX_HP,
   monsterHp: MAX_HP,
   round: 0,
@@ -51,10 +79,15 @@ const state: State = {
   timeLeft: 0,
   timeMax: 1,
   result: null,
+  lastWinGold: 0,
   status: '',
   heard: '',
   micStatus: isSpeechSupported() ? 'need-permission' : 'unsupported',
   micDetail: '',
+  skillLeft: 0,
+  blockCharges: 0,
+  dodgeCharges: 0,
+  firstStrikeDone: false,
 }
 
 const app = document.querySelector<HTMLDivElement>('#app')!
@@ -70,7 +103,6 @@ const voice = new VoiceRecognizer({
     state.heard = transcript
     updateVoiceHud()
     if (!isFinal && transcript.trim().length < 1) return
-    // Try match on interim too (faster feedback) and final
     tryMatch(transcript)
   },
   onStatus: (status, detail) => {
@@ -96,6 +128,10 @@ function escapeHtml(s: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
+}
+
+function job() {
+  return state.jobId ? getJob(state.jobId) : null
 }
 
 function micBadgeHtml(): string {
@@ -124,38 +160,159 @@ function stageInstruction(): string {
     : `Stage 2/2：說出單字「${escapeHtml(state.prompt.displaySecondary)}」`
 }
 
+function chibiHeroHtml(): string {
+  const j = job()
+  const cls = j?.cssClass ?? 'job-swordsman'
+  const cue = j?.weaponCue ?? '⚔️'
+  return `
+    <div class="fighter hero chibi ${cls}" id="hero">
+      <div class="body">
+        <div class="chibi-head"><span class="chibi-face">◡̈</span></div>
+        <div class="chibi-torso"></div>
+        <div class="chibi-weapon" aria-hidden="true">${cue}</div>
+      </div>
+    </div>`
+}
+
+function chibiMonsterHtml(): string {
+  return `
+    <div class="fighter monster chibi" id="monster">
+      <div class="body">
+        <div class="chibi-head mon-head"><span class="chibi-face">◣_◢</span></div>
+        <div class="chibi-torso mon-torso"></div>
+        <div class="chibi-weapon mon-weapon" aria-hidden="true">🪓</div>
+      </div>
+    </div>`
+}
+
 function render() {
   if (state.screen === 'title') {
     const speechOk = isSpeechSupported()
     app.innerHTML = `
       <div class="screen title-screen active">
-        <div class="title-badge">VOICE FIGHTER</div>
+        <div class="title-badge">JRPG VOICE QUEST</div>
         <h1 class="game-title">勇者拼音快打</h1>
-        <p class="subtitle">用麥克風唸出口令，勇者出劍；說錯或太慢，魔物反擊！</p>
+        <p class="subtitle">選職業、逛商店，再用麥克風（或打字）唸出口令出招！</p>
         <div class="mode-row">
-          <button class="btn btn-zhuyin" data-mode="zhuyin" type="button" ${speechOk ? '' : 'disabled'}>注音語音版</button>
-          <button class="btn btn-english" data-mode="english" type="button" ${speechOk ? '' : 'disabled'}>英文語音版</button>
+          <button class="btn btn-zhuyin" data-mode="zhuyin" type="button">注音語音版</button>
+          <button class="btn btn-english" data-mode="english" type="button">英文語音版</button>
         </div>
         <div class="howto">
-          <strong>怎麼玩（語音）</strong><br/>
-          · 允許麥克風後開戰；畫面會顯示<strong>聆聽中</strong><br/>
-          · <strong>注音版</strong>：先唸注音「音」（音對即可，如 ㄐ），再唸漢字（如「雞」）<br/>
-          · <strong>英文版</strong>：先逐字母拼出，再說出單字<br/>
-          · 兩階段都過 → 勇者攻擊；失敗／逾時 → 魔物反擊<br/>
-          · 打滿<strong>對方</strong>血條即勝
+          <strong>冒險流程</strong><br/>
+          · 選模式 → 選職業 → 商店（可跳過）→ 戰鬥<br/>
+          · <strong>注音</strong>：先唸「音」，再唸漢字 · <strong>英文</strong>：先拼字母，再說單字<br/>
+          · 兩階段綠燈 → 攻擊；失敗／逾時 → 魔物反擊（可用技能／道具）<br/>
+          · 語音不可用時可用下方<strong>打字 fallback</strong>
           ${
             speechOk
               ? ''
-              : '<br/><span class="warn-inline">此瀏覽器不支援 Web Speech API，請改用 Chrome／Edge（桌面）或 Safari（需 iOS 設定）。</span>'
+              : '<br/><span class="warn-inline">此瀏覽器不支援 Web Speech API — 請用打字，或改 Chrome／Edge。</span>'
           }
         </div>
       </div>
     `
     app.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((btn) => {
       btn.addEventListener('click', () => {
-        const mode = btn.dataset.mode as GameMode
-        void startFight(mode)
+        state.mode = btn.dataset.mode as GameMode
+        state.screen = 'select'
+        // Fresh adventure session gold if coming from title cold
+        if (state.gold < 0) state.gold = START_GOLD
+        render()
       })
+    })
+    return
+  }
+
+  if (state.screen === 'select') {
+    app.innerHTML = `
+      <div class="screen select-screen active">
+        <div class="panel-head">
+          <h2>選擇職業</h2>
+          <p class="panel-sub">日系 Q 版勇者 · 模式：${state.mode === 'zhuyin' ? '注音' : '英文'}</p>
+        </div>
+        <div class="job-grid">
+          ${JOBS.map(
+            (j) => `
+            <button type="button" class="job-card ${j.cssClass}" data-job="${j.id}">
+              <div class="job-chibi ${j.cssClass}">
+                <div class="chibi-head"><span class="chibi-face">◡̈</span></div>
+                <div class="chibi-torso"></div>
+                <div class="chibi-weapon">${j.weaponCue}</div>
+              </div>
+              <div class="job-name">${escapeHtml(j.name)}</div>
+              <div class="job-blurb">${escapeHtml(j.blurb)}</div>
+              <div class="job-skill"><strong>${escapeHtml(j.skillName)}</strong> — ${escapeHtml(j.skillBlurb)}</div>
+            </button>`,
+          ).join('')}
+        </div>
+        <div class="mode-row">
+          <button class="btn btn-ghost" data-back-title type="button">回標題</button>
+        </div>
+      </div>
+    `
+    app.querySelectorAll<HTMLButtonElement>('[data-job]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        state.jobId = btn.dataset.job as JobId
+        state.screen = 'shop'
+        render()
+      })
+    })
+    app.querySelector('[data-back-title]')!.addEventListener('click', () => {
+      state.screen = 'title'
+      render()
+    })
+    return
+  }
+
+  if (state.screen === 'shop') {
+    const j = job()!
+    app.innerHTML = `
+      <div class="screen shop-screen active">
+        <div class="panel-head">
+          <h2>冒險商店</h2>
+          <p class="panel-sub">
+            <span class="gold-chip">🪙 ${state.gold}</span>
+            · ${escapeHtml(j.name)} ${j.weaponCue}
+          </p>
+        </div>
+        <div class="shop-grid">
+          ${ITEMS.map((it) => {
+            const owned = state.inventory[it.id]
+            const can = state.gold >= it.price
+            return `
+              <div class="shop-card">
+                <div class="shop-name">${escapeHtml(it.name)}</div>
+                <div class="shop-blurb">${escapeHtml(it.blurb)}</div>
+                <div class="shop-meta">價 ${it.price} · 持有 ${owned}</div>
+                <button type="button" class="btn btn-buy" data-buy="${it.id}" ${can ? '' : 'disabled'}>購買</button>
+              </div>`
+          }).join('')}
+        </div>
+        <div class="mode-row">
+          <button class="btn btn-zhuyin" data-to-fight type="button">出征！</button>
+          <button class="btn btn-ghost" data-skip-shop type="button">跳過商店</button>
+          <button class="btn btn-ghost" data-back-select type="button">重選職業</button>
+        </div>
+      </div>
+    `
+    app.querySelectorAll<HTMLButtonElement>('[data-buy]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.buy as ItemId
+        const def = getItem(id)
+        if (state.gold < def.price) return
+        state.gold -= def.price
+        state.inventory[id] += 1
+        render()
+      })
+    })
+    const goFight = () => {
+      void startFight()
+    }
+    app.querySelector('[data-to-fight]')!.addEventListener('click', goFight)
+    app.querySelector('[data-skip-shop]')!.addEventListener('click', goFight)
+    app.querySelector('[data-back-select]')!.addEventListener('click', () => {
+      state.screen = 'select'
+      render()
     })
     return
   }
@@ -163,23 +320,44 @@ function render() {
   if (state.screen === 'result') {
     const win = state.result === 'win'
     voice.stop()
+    const j = job()
     app.innerHTML = `
       <div class="screen result-screen active ${win ? 'win' : 'lose'}">
         <h2>${win ? '勝利！' : '敗北…'}</h2>
         <p class="result-msg">
-          ${win
-            ? '魔物倒下了！你的嗓音拯救了村莊。'
-            : '勇者力竭倒下。再練練發音吧！'}
+          ${
+            win
+              ? `魔物倒下了！獲得 🪙 <strong>${state.lastWinGold}</strong> 金幣（現有 ${state.gold}）。`
+              : '勇者力竭倒下。道具仍保留，再試一次吧！'
+          }
         </p>
-        <p class="result-msg">回合 ${state.round} · 模式：${state.mode === 'zhuyin' ? '注音語音' : '英文語音'}</p>
+        <p class="result-msg">
+          ${j ? escapeHtml(j.name) : '勇者'} · 回合 ${state.round} ·
+          ${state.mode === 'zhuyin' ? '注音' : '英文'}
+        </p>
         <div class="mode-row">
-          <button class="btn btn-zhuyin" data-again type="button">再來一局</button>
+          ${
+            win
+              ? `<button class="btn btn-english" data-to-shop type="button">回商店</button>
+                 <button class="btn btn-zhuyin" data-again type="button">再戰一場</button>`
+              : `<button class="btn btn-zhuyin" data-again type="button">再戰一場</button>
+                 <button class="btn btn-english" data-to-shop type="button">回商店補貨</button>`
+          }
+          <button class="btn btn-ghost" data-reselect type="button">重選職業</button>
           <button class="btn btn-ghost" data-title type="button">回標題</button>
         </div>
       </div>
     `
-    app.querySelector('[data-again]')!.addEventListener('click', () => {
-      if (state.mode) void startFight(state.mode)
+    app.querySelector('[data-again]')?.addEventListener('click', () => {
+      void startFight()
+    })
+    app.querySelector('[data-to-shop]')?.addEventListener('click', () => {
+      state.screen = 'shop'
+      render()
+    })
+    app.querySelector('[data-reselect]')?.addEventListener('click', () => {
+      state.screen = 'select'
+      render()
     })
     app.querySelector('[data-title]')!.addEventListener('click', () => {
       state.screen = 'title'
@@ -195,38 +373,45 @@ function render() {
   const timerPct = state.timeMax > 0 ? clamp((state.timeLeft / state.timeMax) * 100, 0, 100) : 0
   const stage1Cls = stage1Passed || state.stage === 2 ? 'done' : state.stage === 1 ? 'current' : ''
   const stage2Cls = state.stage === 2 ? 'current' : stage1Passed ? '' : 'locked'
+  const j = job()!
 
   app.innerHTML = `
     <div class="screen fight-screen active">
       <div class="hud">
         <div class="hp-block">
-          <div class="hp-label">勇者 ${Math.ceil(state.heroHp)}</div>
+          <div class="hp-label">${escapeHtml(j.name)} ${Math.ceil(state.heroHp)}</div>
           <div class="hp-bar"><div class="hp-fill hero" style="width:${(state.heroHp / MAX_HP) * 100}%"></div></div>
         </div>
-        <div class="round-chip">第 ${state.round} 回合</div>
+        <div class="round-chip">第 ${state.round} 回合 · 🪙${state.gold}</div>
         <div class="hp-block monster">
           <div class="hp-label">魔物 ${Math.ceil(state.monsterHp)}</div>
           <div class="hp-bar"><div class="hp-fill monster" style="width:${(state.monsterHp / MAX_HP) * 100}%"></div></div>
         </div>
       </div>
 
+      <div class="buff-row" id="buff-row">
+        ${state.blockCharges > 0 ? `<span class="buff-chip">護盾×${state.blockCharges}</span>` : ''}
+        ${state.dodgeCharges > 0 ? `<span class="buff-chip dodge">影遁×${state.dodgeCharges}</span>` : ''}
+        ${j.damageMult > 1 ? `<span class="buff-chip">傷×${j.damageMult}</span>` : ''}
+      </div>
+
       <div class="stage" id="stage">
         <div class="stage-ground"></div>
-        <div class="fighter hero" id="hero">
-          <div class="body">
-            <div class="silhouette"></div>
-            <div class="face">🗡️</div>
-            <div class="weapon"></div>
-          </div>
-        </div>
-        <div class="fighter monster" id="monster">
-          <div class="body">
-            <div class="silhouette"></div>
-            <div class="face">👹</div>
-            <div class="weapon"></div>
-          </div>
-        </div>
+        ${chibiHeroHtml()}
+        ${chibiMonsterHtml()}
         <div class="fx-slash" id="fx-slash"><div class="lottie-box" id="lottie-box"></div></div>
+      </div>
+
+      <div class="action-bar" id="action-bar">
+        <button type="button" class="act-btn skill" data-skill ${state.skillLeft <= 0 ? 'disabled' : ''}>
+          ${escapeHtml(j.skillName)} <span class="act-count">${state.skillLeft}</span>
+        </button>
+        ${ITEMS.map((it) => {
+          const n = state.inventory[it.id]
+          return `<button type="button" class="act-btn item" data-item="${it.id}" ${n <= 0 ? 'disabled' : ''}>
+            ${escapeHtml(it.name)} <span class="act-count">${n}</span>
+          </button>`
+        }).join('')}
       </div>
 
       <div class="prompt-panel voice-panel">
@@ -245,16 +430,16 @@ function render() {
         <div class="prompt-hint" id="stage-hint">${stageInstruction()}</div>
         <div class="heard-line" id="heard-line">聽到：${escapeHtml(state.heard) || '（尚未辨識）'}</div>
         <div class="status-toast" id="status">${escapeHtml(state.status)}</div>
+        <form class="type-fallback" id="type-form">
+          <input type="text" id="type-input" class="type-input" placeholder="打字 fallback：輸入答案後送出" autocomplete="off" enterkeyhint="done" />
+          <button type="submit" class="btn btn-ghost" id="btn-type">送出</button>
+        </form>
         <div class="voice-actions">
           <button type="button" class="btn btn-mic" id="btn-mic" ${
             state.micStatus === 'unsupported' ? 'disabled' : ''
           }>${state.micStatus === 'listening' ? '🎤 聆聽中' : '🎤 啟用／重啟麥克風'}</button>
           <button type="button" class="btn btn-ghost" id="btn-quit">回標題</button>
         </div>
-      </div>
-
-      <div class="keypad demoted" id="keypad" aria-hidden="true">
-        <p class="keypad-note">打字鍵盤已停用 — 請用麥克風攻擊</p>
       </div>
     </div>
   `
@@ -283,6 +468,28 @@ function wireFightControls() {
     render()
   })
 
+  document.querySelector('#type-form')?.addEventListener('submit', (e) => {
+    e.preventDefault()
+    const input = document.querySelector<HTMLInputElement>('#type-input')
+    if (!input) return
+    const text = input.value.trim()
+    if (!text) return
+    state.heard = text
+    input.value = ''
+    updateVoiceHud()
+    tryMatch(text)
+  })
+
+  document.querySelector('[data-skill]')?.addEventListener('click', () => {
+    void useSkill()
+  })
+
+  document.querySelectorAll<HTMLButtonElement>('[data-item]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      void useItem(btn.dataset.item as ItemId)
+    })
+  })
+
   window.onkeydown = (e) => {
     if (e.key === 'Escape' && state.screen === 'fight') {
       voice.stop()
@@ -290,6 +497,31 @@ function wireFightControls() {
       stopLoop()
       render()
     }
+  }
+}
+
+function refreshActionBar() {
+  if (state.screen !== 'fight') return
+  const skillBtn = document.querySelector<HTMLButtonElement>('[data-skill]')
+  const j = job()
+  if (skillBtn && j) {
+    skillBtn.disabled = state.skillLeft <= 0 || state.phase !== 'input'
+    skillBtn.innerHTML = `${escapeHtml(j.skillName)} <span class="act-count">${state.skillLeft}</span>`
+  }
+  ITEMS.forEach((it) => {
+    const btn = document.querySelector<HTMLButtonElement>(`[data-item="${it.id}"]`)
+    if (!btn) return
+    const n = state.inventory[it.id]
+    btn.disabled = n <= 0 || state.phase !== 'input'
+    btn.innerHTML = `${escapeHtml(it.name)} <span class="act-count">${n}</span>`
+  })
+  const buff = document.querySelector('#buff-row')
+  if (buff && j) {
+    buff.innerHTML = `
+      ${state.blockCharges > 0 ? `<span class="buff-chip">護盾×${state.blockCharges}</span>` : ''}
+      ${state.dodgeCharges > 0 ? `<span class="buff-chip dodge">影遁×${state.dodgeCharges}</span>` : ''}
+      ${j.damageMult > 1 ? `<span class="buff-chip">傷×${j.damageMult}</span>` : ''}
+    `
   }
 }
 
@@ -315,6 +547,7 @@ function updateVoiceHud() {
     pills[0]!.className = `stage-pill ${stage1Passed || state.stage === 2 ? 'done' : state.stage === 1 ? 'current' : ''}`
     pills[1]!.className = `stage-pill ${state.stage === 2 ? 'current' : stage1Passed ? '' : 'locked'}`
   }
+  refreshActionBar()
 }
 
 function lightPromptTarget(which: 'primary' | 'secondary') {
@@ -330,7 +563,6 @@ async function tryMatch(transcript: string) {
   const ok = matchStage(state.mode, state.stage, transcript, expected)
   if (!ok) return
 
-  // Lock input so rematch / timer cannot race during the green hold
   state.phase = 'resolving'
 
   if (state.stage === 1) {
@@ -348,13 +580,109 @@ async function tryMatch(transcript: string) {
     return
   }
 
-  // Stage 2 pass → green lamp, then attack
   state.status = '② 綠燈！出招'
   lightPromptTarget('secondary')
   updateVoiceHud()
   await wait(STAGE_OK_HOLD_MS)
   if (state.screen !== 'fight' || !state.prompt) return
   void resolveSuccess()
+}
+
+async function useSkill() {
+  if (state.phase !== 'input' || state.skillLeft <= 0 || !state.jobId) return
+  const id = state.jobId
+  if (id === 'swordsman') {
+    state.skillLeft -= 1
+    const dmg = SKILL_FLAT.swordsman
+    state.phase = 'resolving'
+    state.status = `破甲斬！-${dmg}`
+    state.monsterHp = clamp(state.monsterHp - dmg, 0, MAX_HP)
+    playHeroAttackFx(dmg)
+    updateHpBars()
+    refreshActionBar()
+    await wait(550)
+    if (state.monsterHp <= 0) {
+      endFight()
+      return
+    }
+    state.phase = 'input'
+    updateVoiceHud()
+    return
+  }
+  if (id === 'paladin') {
+    state.skillLeft -= 1
+    state.blockCharges += 1
+    state.status = '聖盾展開！下次傷害將被阻擋'
+    refreshActionBar()
+    updateVoiceHud()
+    return
+  }
+  if (id === 'mage') {
+    state.skillLeft -= 1
+    state.timeLeft += MAGE_TIME_BONUS_MS
+    state.timeMax += MAGE_TIME_BONUS_MS
+    state.status = `時光延展！+${MAGE_TIME_BONUS_MS / 1000} 秒`
+    const fill = document.querySelector<HTMLElement>('#timer-fill')
+    if (fill && state.timeMax > 0) {
+      fill.style.transform = `scaleX(${clamp(state.timeLeft / state.timeMax, 0, 1)})`
+    }
+    refreshActionBar()
+    updateVoiceHud()
+    return
+  }
+  if (id === 'rogue') {
+    state.skillLeft -= 1
+    state.dodgeCharges += 1
+    state.status = '影遁就緒！下次失敗將閃過'
+    refreshActionBar()
+    updateVoiceHud()
+  }
+}
+
+async function useItem(itemId: ItemId) {
+  if (state.phase !== 'input') return
+  if (state.inventory[itemId] <= 0) return
+  const def = getItem(itemId)
+
+  if (def.damage) {
+    state.inventory[itemId] -= 1
+    state.phase = 'resolving'
+    state.status = `${def.name}！-${def.damage}`
+    state.monsterHp = clamp(state.monsterHp - def.damage, 0, MAX_HP)
+    playHeroAttackFx(def.damage)
+    updateHpBars()
+    refreshActionBar()
+    await wait(550)
+    if (state.monsterHp <= 0) {
+      endFight()
+      return
+    }
+    state.phase = 'input'
+    updateVoiceHud()
+    return
+  }
+
+  state.inventory[itemId] -= 1
+  if (def.timeBonusMs) {
+    state.timeLeft += def.timeBonusMs
+    state.timeMax += def.timeBonusMs
+    state.status = `沙漏！+${def.timeBonusMs / 1000} 秒`
+    const fill = document.querySelector<HTMLElement>('#timer-fill')
+    if (fill && state.timeMax > 0) {
+      fill.style.transform = `scaleX(${clamp(state.timeLeft / state.timeMax, 0, 1)})`
+    }
+  }
+  if (def.block) {
+    state.blockCharges += 1
+    state.status = '護符生效！下次傷害將被阻擋'
+  }
+  if (def.heal) {
+    state.heroHp = clamp(state.heroHp + def.heal, 0, MAX_HP)
+    state.status = `回復藥！+${def.heal} HP`
+    updateHpBars()
+  }
+  refreshActionBar()
+  updateVoiceHud()
 }
 
 function mountLottie() {
@@ -382,7 +710,7 @@ function mountLottie() {
   })
 }
 
-function playHeroAttackFx() {
+function playHeroAttackFx(dmgOverride?: number) {
   const hero = document.querySelector('#hero')
   const mon = document.querySelector('#monster')
   const fx = document.querySelector('#fx-slash')
@@ -392,7 +720,10 @@ function playHeroAttackFx() {
   if (lottieAnim && lottieReady) {
     lottieAnim.goToAndPlay(0, true)
   }
-  spawnFloat('mon-dmg', `-${state.prompt?.damage ?? 0}`)
+  const dmg =
+    dmgOverride ??
+    Math.round((state.prompt?.damage ?? 0) * (job()?.damageMult ?? 1))
+  spawnFloat('mon-dmg', `-${dmg}`)
   setTimeout(() => {
     hero?.classList.remove('attack-lunge')
     mon?.classList.remove('hit')
@@ -400,12 +731,12 @@ function playHeroAttackFx() {
   }, 450)
 }
 
-function playMonsterAttackFx() {
+function playMonsterAttackFx(dealt: number) {
   const hero = document.querySelector('#hero')
   const mon = document.querySelector('#monster')
   mon?.classList.add('attack-lunge')
   hero?.classList.add('hit')
-  spawnFloat('hero-dmg', `-${MONSTER_DMG}`)
+  spawnFloat('hero-dmg', dealt > 0 ? `-${dealt}` : 'MISS')
   setTimeout(() => {
     mon?.classList.remove('attack-lunge')
     hero?.classList.remove('hit')
@@ -413,33 +744,52 @@ function playMonsterAttackFx() {
 }
 
 function spawnFloat(cls: string, text: string) {
-  const stage = document.querySelector('#stage')
-  if (!stage) return
+  const stageEl = document.querySelector('#stage')
+  if (!stageEl) return
   const el = document.createElement('div')
   el.className = `damage-float ${cls}`
   el.textContent = text
-  stage.appendChild(el)
+  stageEl.appendChild(el)
   setTimeout(() => el.remove(), 800)
 }
 
-async function startFight(mode: GameMode) {
+async function startFight() {
+  if (!state.mode || !state.jobId) return
   const ok = await voice.ensurePermission()
-  state.mode = mode
+  const j = getJob(state.jobId)
   state.screen = 'fight'
   state.heroHp = MAX_HP
   state.monsterHp = MAX_HP
   state.round = 0
-  state.deck = createPromptDeck(mode)
+  state.deck = createPromptDeck(state.mode)
   state.deckIndex = 0
   state.result = null
+  state.lastWinGold = 0
   state.heard = ''
+  state.skillLeft = j.skillMax
+  state.blockCharges = 0
+  state.dodgeCharges = 0
+  state.firstStrikeDone = false
   state.status = ok
-    ? mode === 'zhuyin'
-      ? '注音語音模式開始！'
-      : '英文語音模式開始！'
-    : '請點「啟用麥克風」允許權限'
-  voice.setLang(speechLang(mode))
+    ? `${j.name}出征！`
+    : '請點「啟用麥克風」或使用打字 fallback'
+  voice.setLang(speechLang(state.mode))
   render()
+
+  // Rogue first-strike
+  if (j.firstStrike > 0 && !state.firstStrikeDone) {
+    state.firstStrikeDone = true
+    state.monsterHp = clamp(state.monsterHp - j.firstStrike, 0, MAX_HP)
+    state.status = `盜賊先制！-${j.firstStrike}`
+    playHeroAttackFx(j.firstStrike)
+    updateHpBars()
+    await wait(500)
+    if (state.monsterHp <= 0) {
+      endFight()
+      return
+    }
+  }
+
   nextRound()
   startLoop()
   if (ok) {
@@ -466,7 +816,6 @@ function nextRound() {
   state.timeLeft = state.prompt.timeMs
   state.status = '依階段唸出招式！'
   render()
-  // Keep mic running across rounds
   if (state.micStatus !== 'listening' && state.micStatus !== 'unsupported') {
     voice.setLang(speechLang(state.mode!))
     voice.start()
@@ -475,14 +824,14 @@ function nextRound() {
 
 async function resolveSuccess() {
   if (!state.prompt) return
-  // May already be 'resolving' after stage-2 green hold
   if (state.phase !== 'input' && state.phase !== 'resolving') return
   state.phase = 'resolving'
-  state.status = '雙階段通過！命中！'
+  const mult = job()?.damageMult ?? 1
+  const dmg = Math.round(state.prompt.damage * mult)
+  state.status = `雙階段通過！命中 -${dmg}！`
   updateVoiceHud()
-  const dmg = state.prompt.damage
   state.monsterHp = clamp(state.monsterHp - dmg, 0, MAX_HP)
-  playHeroAttackFx()
+  playHeroAttackFx(dmg)
   updateHpBars()
   await wait(550)
   if (state.monsterHp <= 0) {
@@ -495,10 +844,28 @@ async function resolveSuccess() {
 async function resolveFail(reason: string) {
   if (state.phase !== 'input') return
   state.phase = 'resolving'
-  state.status = reason
+
+  if (state.dodgeCharges > 0) {
+    state.dodgeCharges -= 1
+    state.status = `${reason} → 影遁閃過！`
+    updateVoiceHud()
+    playMonsterAttackFx(0)
+    await wait(550)
+    nextRound()
+    return
+  }
+
+  let dealt = MONSTER_DMG
+  if (state.blockCharges > 0) {
+    state.blockCharges -= 1
+    dealt = 0
+    state.status = `${reason} → 護盾擋下！`
+  } else {
+    state.status = reason
+  }
   updateVoiceHud()
-  state.heroHp = clamp(state.heroHp - MONSTER_DMG, 0, MAX_HP)
-  playMonsterAttackFx()
+  state.heroHp = clamp(state.heroHp - dealt, 0, MAX_HP)
+  playMonsterAttackFx(dealt)
   updateHpBars()
   await wait(550)
   if (state.heroHp <= 0) {
@@ -513,9 +880,10 @@ function updateHpBars() {
   const monFill = document.querySelector<HTMLElement>('.hp-fill.monster')
   const heroLabel = document.querySelector('.hp-block:not(.monster) .hp-label')
   const monLabel = document.querySelector('.hp-block.monster .hp-label')
+  const j = job()
   if (heroFill) heroFill.style.width = `${(state.heroHp / MAX_HP) * 100}%`
   if (monFill) monFill.style.width = `${(state.monsterHp / MAX_HP) * 100}%`
-  if (heroLabel) heroLabel.textContent = `勇者 ${Math.ceil(state.heroHp)}`
+  if (heroLabel) heroLabel.textContent = `${j?.name ?? '勇者'} ${Math.ceil(state.heroHp)}`
   if (monLabel) monLabel.textContent = `魔物 ${Math.ceil(state.monsterHp)}`
   const status = document.querySelector('#status')
   if (status) status.textContent = state.status
@@ -526,6 +894,10 @@ function endFight() {
   voice.stop()
   state.phase = 'idle'
   state.result = state.monsterHp <= 0 ? 'win' : 'lose'
+  if (state.result === 'win') {
+    state.lastWinGold = winGold(state.round)
+    state.gold += state.lastWinGold
+  }
   state.screen = 'result'
   window.onkeydown = null
   render()

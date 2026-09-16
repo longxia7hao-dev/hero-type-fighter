@@ -76,3 +76,8 @@
 3. ①過→②亮有明確切換。  
 4. 標題怎麼玩已改收音雙段，無「打字出招」主說明。  
 5. 色跟 ART-LOCK-001。
+
+
+---
+
+**疊加：** 見 `HUD-VOICE-002-lit-ok.md`（`#prompt-primary.lit-ok`／`#prompt-secondary.lit-ok`）。
