@@ -502,6 +502,7 @@ function render() {
       </div>
 
       <div class="stage" id="stage">
+        <img class="stage-bg" src="${import.meta.env.BASE_URL}art/bg-battle.png" alt="" aria-hidden="true" />
         <div class="stage-ground"></div>
         ${chibiHeroHtml()}
         ${chibiMonsterHtml()}

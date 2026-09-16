@@ -1331,13 +1331,22 @@ h1.game-title {
     0 0 0 1px rgba(80, 40, 140, 0.4),
     inset 0 0 28px rgba(20, 8, 48, 0.25);
   background-color: #12082a;
-  background-image: var(--battle-bg, var(--castle-bg, none));
-  background-size: cover;
-  background-position: center bottom;
-  background-repeat: no-repeat;
+  overflow: hidden;
 }
 
-/* kill old brown strip / wedge overlays — art carries path */
+/* explicit img: fill box so castle + path + grass all stay in frame */
+.fight-screen .stage-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  object-position: center center;
+  z-index: 0;
+  pointer-events: none;
+  user-select: none;
+}
+
 .fight-screen .stage::before,
 .fight-screen .stage::after {
   content: none !important;
