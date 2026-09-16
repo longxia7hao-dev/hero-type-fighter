@@ -194,8 +194,9 @@ const voice = new VoiceRecognizer({
     if (state.screen !== 'fight' || state.phase !== 'input' || !state.prompt) return
     state.heard = transcript
     updateVoiceHud()
+    pulseHeardLine(isFinal)
     if (!isFinal && transcript.trim().length < 1) return
-    tryMatch(transcript)
+    void tryMatch(transcript, isFinal)
   },
   onStatus: (status, detail) => {
     state.micStatus = status
@@ -642,11 +643,30 @@ function lightPromptTarget(which: 'primary' | 'secondary') {
   el?.classList.add('lit-ok', 'pass')
 }
 
-async function tryMatch(transcript: string) {
+function pulseHeardLine(isFinal: boolean) {
+  const el = document.querySelector('#heard-line')
+  if (!el) return
+  el.classList.remove('heard-pulse', 'heard-final')
+  // reflow so animation can replay
+  void (el as HTMLElement).offsetWidth
+  el.classList.add('heard-pulse')
+  if (isFinal) el.classList.add('heard-final')
+}
+
+async function tryMatch(transcript: string, isFinal = true) {
   if (state.phase !== 'input' || !state.prompt || !state.mode) return
   const expected = state.stage === 1 ? state.prompt.stage1 : state.prompt.stage2
   const ok = matchStage(state.mode, state.stage, transcript, expected)
-  if (!ok) return
+  if (!ok) {
+    // CHANGE-VOICE-003 heard feedback — do not change match.ts loosen logic here
+    if (isFinal && transcript.trim()) {
+      const target =
+        state.stage === 1 ? state.prompt.displayPrimary : state.prompt.displaySecondary
+      state.status = `聽到「${transcript.trim()}」尚未對上 → 再試「${target}」`
+      updateVoiceHud()
+    }
+    return
+  }
 
   state.phase = 'resolving'
 
