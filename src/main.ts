@@ -226,8 +226,8 @@ function escapeHtml(s: string): string {
 /** ART-IMAGINE-001 — public/art portraits (do not touch voice match) */
 const ART_BASE = `${import.meta.env.BASE_URL}art/`
 const JOB_ART: Record<JobId, string> = {
-  swordsman: 'hero-swordsman.jpg',
-  paladin: 'hero-paladin.svg',
+  swordsman: 'hero-swordsman.png',
+  paladin: 'hero-paladin.png',
   mage: 'hero-mage.png',
   rogue: 'hero-rogue.png',
 }
