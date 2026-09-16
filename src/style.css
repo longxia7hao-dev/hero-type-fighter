@@ -1,18 +1,22 @@
 :root {
-  --bg-deep: #0b1020;
-  --bg-mid: #1a1240;
+  /* UI-CASTLE-001 — night purple castle */
+  --bg-deep: #0a0618;
+  --bg-mid: #1a0f3a;
+  --castle-violet: #2a1558;
+  --castle-glass: rgba(28, 14, 58, 0.72);
   --gold: #ffd76a;
   --gold-dim: #c9a227;
+  --gold-edge: rgba(255, 215, 106, 0.55);
   --hero: #4ecdc4;
   --hero-dark: #1a8a82;
   --monster: #ff6b6b;
   --monster-dark: #a12b2b;
-  --panel: rgba(12, 16, 36, 0.88);
+  --panel: var(--castle-glass);
   --ok: #7CFC00;
   --bad: #ff4d4d;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
-  color: #f5f5f5;
+  color: #f5f0ff;
   background: var(--bg-deep);
 }
 
@@ -26,7 +30,7 @@ html, body {
   margin: 0;
   height: 100%;
   overflow: hidden;
-  background: radial-gradient(ellipse at 50% 20%, #2a1b5e 0%, #0b1020 70%);
+  background: var(--bg-deep);
   touch-action: manipulation;
 }
 
@@ -1244,4 +1248,77 @@ h1.game-title {
 }
 .fighter.monster.portrait-wrap .portrait-fight {
   transform: none;
+}
+
+
+/* —— UI-CASTLE-001 chrome: glass + gold on all five screens —— */
+.screen {
+  position: relative;
+  z-index: 1;
+}
+
+.screen::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(180deg, rgba(12, 6, 28, 0.35) 0%, rgba(10, 6, 24, 0.55) 45%, rgba(6, 3, 16, 0.88) 100%),
+    var(--castle-bg, none);
+  background-size: cover;
+  background-position: center bottom;
+  background-repeat: no-repeat;
+}
+
+.title-screen .howto,
+.select-screen .panel-head,
+.shop-screen .panel-head,
+.result-screen .result-msg,
+.fight-screen .prompt-panel,
+.fight-screen .action-bar {
+  background: var(--castle-glass);
+  border: 1.5px solid var(--gold-edge);
+  border-radius: 16px;
+  box-shadow:
+    0 0 0 1px rgba(80, 40, 140, 0.35),
+    0 12px 40px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 215, 106, 0.12);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.title-screen .howto {
+  padding: 14px 16px;
+}
+
+.select-screen .panel-head,
+.shop-screen .panel-head {
+  padding: 10px 12px;
+}
+
+.job-card,
+.shop-card {
+  background: linear-gradient(165deg, rgba(48, 24, 96, 0.9), rgba(18, 10, 42, 0.92)) !important;
+  border: 2px solid var(--gold-edge) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 215, 106, 0.15);
+}
+
+.result-screen h2 {
+  text-shadow: 0 0 24px rgba(255, 215, 106, 0.35);
+}
+
+.fight-screen .hud {
+  background: var(--castle-glass);
+  border: 1px solid var(--gold-edge);
+  border-radius: 14px;
+  padding: 8px 10px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.btn-ghost {
+  background: rgba(28, 14, 58, 0.65);
+  border: 1.5px solid var(--gold-edge);
+  color: #f5e9c8;
 }

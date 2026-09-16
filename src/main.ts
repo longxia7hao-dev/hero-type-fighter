@@ -1,4 +1,11 @@
 import './style.css'
+
+/** UI-CASTLE-001 backdrop (public/art) */
+document.documentElement.style.setProperty(
+  '--castle-bg',
+  `url(${import.meta.env.BASE_URL}art/bg-castle.png)`,
+)
+
 import lottie, { type AnimationItem } from 'lottie-web'
 import {
   type GameMode,
