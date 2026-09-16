@@ -1322,3 +1322,72 @@ h1.game-title {
   border: 1.5px solid var(--gold-edge);
   color: #f5e9c8;
 }
+
+/* —— UI-CASTLE-001 fight stage: stone path + castle far —— */
+.fight-screen .stage {
+  border: 2px solid var(--gold-edge);
+  border-radius: 18px;
+  box-shadow:
+    0 0 0 1px rgba(80, 40, 140, 0.4),
+    inset 0 0 40px rgba(20, 8, 48, 0.35);
+  background-image:
+    linear-gradient(180deg, rgba(12, 6, 28, 0.15) 0%, rgba(8, 4, 20, 0.55) 62%, rgba(6, 3, 14, 0.75) 100%),
+    var(--castle-bg, none);
+  background-size: cover;
+  background-position: center 30%;
+  background-repeat: no-repeat;
+}
+
+.fight-screen .stage-ground {
+  height: 32%;
+  background:
+    linear-gradient(180deg, transparent, rgba(40, 28, 18, 0.35)),
+    repeating-linear-gradient(90deg, #4a3a2a 0 22px, #3a2c1e 22px 44px),
+    radial-gradient(ellipse at 20% 70%, rgba(80, 160, 70, 0.35) 0 12%, transparent 13%),
+    radial-gradient(ellipse at 75% 80%, rgba(90, 170, 80, 0.28) 0 10%, transparent 11%);
+  opacity: 0.92;
+  border-top: 1px solid rgba(255, 215, 106, 0.2);
+}
+
+/* 圓框拿掉 — rect glass, not circle crop */
+.chibi-head,
+.job-chibi .chibi-head,
+.fighter.monster .chibi-head.mon-head {
+  border-radius: 12px !important;
+}
+
+.job-portrait {
+  border-radius: 14px;
+  border: 1.5px solid var(--gold-edge);
+  background: rgba(20, 10, 42, 0.5);
+}
+
+.mic-badge,
+.round-chip,
+.buff-chip,
+.gold-chip,
+.stage-pill {
+  border-radius: 10px !important;
+}
+
+.hp-bar {
+  border-radius: 8px !important;
+  border: 1px solid var(--gold-edge);
+  background: rgba(12, 8, 28, 0.85);
+}
+
+.result-screen {
+  background: transparent;
+}
+
+.result-screen.active {
+  align-items: center;
+}
+
+.result-screen .mode-row {
+  background: var(--castle-glass);
+  border: 1.5px solid var(--gold-edge);
+  border-radius: 16px;
+  padding: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+}
