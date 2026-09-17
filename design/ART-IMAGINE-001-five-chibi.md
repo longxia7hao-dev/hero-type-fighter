@@ -1,7 +1,7 @@
 # ART-IMAGINE-001 五角日式 Q 版立繪定稿方向
 
-狀態：**DIRECTION LOCKED**（2026-09-16）  
-Imagine／本席生成額度：**撞牆** → 備援繪製或額度回後掛同路徑。禁止幾何色塊當終態。
+狀態：**SHIPPED**（2026-09-17 Imagine 五角定稿已掛）  
+檔名：`hero-*.png`／`monster.png`（另存 routine 別名 `job-*.png`／`monster-foe.png`）。禁止幾何色塊當終態。
 
 ## 硬規格（製作人）
 選角卡＋戰場共用同一套圖。日式 Q 版立繪：**大頭小身、五官／服裝／武器完整**，一眼可認職業。

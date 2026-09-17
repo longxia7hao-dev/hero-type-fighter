@@ -311,12 +311,12 @@ function escapeHtml(s: string): string {
 /** ART-STYLE-MOONCASTLE — public/art portraits (do not touch voice match) */
 const ART_BASE = `${import.meta.env.BASE_URL}art/`
 const JOB_ART: Record<JobId, string> = {
-  swordsman: 'hero-swordsman.jpg',
-  paladin: 'hero-paladin.jpg',
-  mage: 'hero-mage.jpg',
-  rogue: 'hero-rogue.jpg',
+  swordsman: 'hero-swordsman.png',
+  paladin: 'hero-paladin.png',
+  mage: 'hero-mage.png',
+  rogue: 'hero-rogue.png',
 }
-const MONSTER_ART = 'monster.jpg'
+const MONSTER_ART = 'monster.png'
 
 function portraitImg(file: string, alt: string, cls = ''): string {
   return `<img class="portrait ${cls}" src="${ART_BASE}${file}" alt="${escapeHtml(alt)}" draggable="false" loading="eager" />`
