@@ -74,11 +74,11 @@ var dt=Object.defineProperty;var mt=(t,e,r)=>e in t?dt(t,e,{enumerable:!0,config
         <div class="panel-head">
           <div class="title-badge">AI智能獸之讀音之戰</div>
           <h2>選擇性別</h2>
-          <p class="panel-sub">訓練師的外觀標記（僅存於本機狀態）</p>
+          <p class="panel-sub">訓練師半身剪影（非職業卡）· 僅存本機</p>
         </div>
         <div class="mode-row gender-row">
-          <button class="btn btn-zhuyin gender-btn" data-gender="male" type="button">男</button>
-          <button class="btn btn-english gender-btn" data-gender="female" type="button">女</button>
+          <button class="btn btn-zhuyin gender-btn" data-gender="male" type="button"><span class="gender-sil" aria-hidden="true"></span>男</button>
+          <button class="btn btn-english gender-btn" data-gender="female" type="button"><span class="gender-sil is-female" aria-hidden="true"></span>女</button>
         </div>
         <div class="mode-row">
           <button class="btn btn-ghost" data-back-title type="button">回標題</button>
@@ -105,7 +105,7 @@ var dt=Object.defineProperty;var mt=(t,e,r)=>e in t?dt(t,e,{enumerable:!0,config
         <div class="panel-head">
           <div class="title-badge">AI智能獸之讀音之戰</div>
           <h2>喚出第一隻智能獸</h2>
-          <p class="panel-sub">輸入關鍵字（無需 AI API · 占位立繪）</p>
+          <p class="panel-sub">輸入關鍵字 → Q 版金邊占位獸（真圖等製作人板）</p>
         </div>
         <div class="beast-preview-wrap">
           ${beastPlaceholderHtml(c,"preview-beast")}
