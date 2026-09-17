@@ -8,7 +8,7 @@ document.documentElement.style.setProperty(
 )
 document.documentElement.style.setProperty(
   '--title-bg',
-  `url(${import.meta.env.BASE_URL}art/bg-title.jpg)`,
+  `url(${import.meta.env.BASE_URL}art/bg-title-moon.jpg)`,
 )
 document.documentElement.style.setProperty(
   '--battle-bg',

@@ -1410,6 +1410,6 @@ h1.game-title {
 .title-screen::before {
   background-image: var(--title-bg, var(--castle-bg, none));
   background-size: cover;
-  background-position: 75% 15%;
+  background-position: 78% 14%;
   background-repeat: no-repeat;
 }

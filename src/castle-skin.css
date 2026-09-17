@@ -36,7 +36,7 @@ html, body, #app {
 .title-screen::before {
   background-image: var(--title-bg, var(--castle-bg, none)) !important;
   background-size: cover !important;
-  background-position: 75% 15% !important;
+  background-position: 78% 14% !important;
   background-repeat: no-repeat !important;
 }
 
