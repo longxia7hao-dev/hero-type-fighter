@@ -359,7 +359,7 @@ function chibiHeroHtml(): string {
   const file = JOB_ART[id]
   return `
     <div class="fighter hero portrait-wrap ${cls}" id="hero">
-      ${portraitImg(file, j?.name ?? '勇者', 'portrait-fight')}
+      ${portraitImg(file, j?.name ?? '挑戰者', 'portrait-fight')}
     </div>`
 }
 
@@ -459,7 +459,7 @@ function render() {
         <div class="panel-head">
           <div class="title-badge">AI智能獸之讀音之戰</div>
           <h2>選擇職業</h2>
-          <p class="panel-sub">日系 Q 版勇者 · 模式：${state.mode === 'zhuyin' ? '注音' : '英文'}</p>
+          <p class="panel-sub">日系 Q 版 · 智能獸 · 模式：${state.mode === 'zhuyin' ? '注音' : '英文'}</p>
         </div>
         <div class="job-grid">
           ${JOBS.map(
@@ -565,11 +565,11 @@ function render() {
           ${
             win
               ? `魔物倒下了！獲得 🪙 <strong>${state.lastWinGold}</strong> 金幣（現有 ${state.gold}）。`
-              : '勇者力竭倒下。道具仍保留，再試一次吧！'
+              : '挑戰者力竭倒下。道具仍保留，再試一次吧！'
           }
         </p>
         <p class="result-msg">
-          ${j ? escapeHtml(j.name) : '勇者'} · 回合 ${state.round} ·
+          ${j ? escapeHtml(j.name) : '挑戰者'} · 回合 ${state.round} ·
           ${state.mode === 'zhuyin' ? '注音' : '英文'}
         </p>
         <div class="mode-row">
@@ -1283,7 +1283,7 @@ function updateHpBars() {
   const j = job()
   if (heroFill) heroFill.style.width = `${(state.heroHp / MAX_HP) * 100}%`
   if (monFill) monFill.style.width = `${(state.monsterHp / MAX_HP) * 100}%`
-  if (heroLabel) heroLabel.textContent = `${j?.name ?? '勇者'} ${Math.ceil(state.heroHp)}`
+  if (heroLabel) heroLabel.textContent = `${j?.name ?? '挑戰者'} ${Math.ceil(state.heroHp)}`
   if (monLabel) {
     const monName =
       state.playMode === 'realm' && state.spirit
@@ -1311,7 +1311,7 @@ function endFight() {
     return
   }
   if (state.playMode === 'realm' && state.heroHp <= 0) {
-    state.lastCatchMsg = '勇者力竭 — 未收入印靈。'
+    state.lastCatchMsg = '挑戰者力竭 — 未收入印靈。'
     state.screen = 'realm-result'
     window.onkeydown = null
     render()
