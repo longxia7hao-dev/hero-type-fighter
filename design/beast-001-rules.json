@@ -1,0 +1,14 @@
+{
+  "id": "BEAST-001",
+  "title": "AI智能獸之讀音之戰",
+  "defaultBeastName": "我的智能獸",
+  "storySlides": 5,
+  "wild": {
+    "maxHp": 100,
+    "monsterDmg": 14,
+    "pool": ["wild_spark", "wild_leaf", "wild_tide", "wild_shade", "wild_glow"]
+  },
+  "screens": ["title", "gender", "story", "prompt-beast", "hub", "fight", "result", "codex", "realm"],
+  "hideFromMainPath": ["select", "shop"],
+  "noAiApi": true
+}

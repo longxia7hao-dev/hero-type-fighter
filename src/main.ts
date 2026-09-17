@@ -58,6 +58,15 @@ import {
   REALM_ENCOUNTERS_MIN,
   REALM_ENCOUNTERS_MAX,
 } from './catch'
+import {
+  type PlayerGender,
+  type BeastDef,
+  STORY_SLIDES,
+  createBeastFromPrompt,
+  pickWildBeast,
+  beastPlaceholderHtml,
+  DEFAULT_BEAST_NAME,
+} from './beast'
 
 /** Brief green-lamp hold after a stage is accepted (ms) */
 const STAGE_OK_HOLD_MS = 450
@@ -100,6 +109,9 @@ function resetAdventureSession() {
   state.sealHpSnapshot = 100
   state.lastCatchMsg = ''
   state.codexSelectedId = null
+  state.wildBeast = null
+  state.storyIndex = 0
+  // keep playerGender / playerBeast across title returns (hub continuity)
 }
 
 function goTitleFresh() {
@@ -125,6 +137,11 @@ function typeFallbackPlaceholder(): string {
 function simulateQaVictory() {
   if (!state.mode) state.mode = 'zhuyin'
   if (!state.jobId) state.jobId = 'swordsman'
+  if (!state.playerBeast) {
+    state.playerBeast = createBeastFromPrompt('測試')
+  }
+  if (!state.playerGender) state.playerGender = 'male'
+  state.playMode = state.playMode === 'realm' ? 'realm' : 'wild'
   voice.stop()
   stopLoop()
   window.onkeydown = null
@@ -166,7 +183,7 @@ function wireTitleLongPressQa() {
 }
 
 
-type Screen = 'title' | 'select' | 'shop' | 'fight' | 'result' | 'realm' | 'codex' | 'realm-result'
+type Screen = 'title' | 'gender' | 'story' | 'prompt-beast' | 'hub' | 'select' | 'shop' | 'fight' | 'result' | 'realm' | 'codex' | 'realm-result'
 type StageNum = 1 | 2
 
 interface State {
@@ -198,10 +215,16 @@ interface State {
   /** Rogue dodge next fail */
   dodgeCharges: number
   firstStrikeDone: boolean
-  /** adventure = BRIEF-RPG; realm = BRIEF-CATCH */
-  playMode: 'adventure' | 'realm'
-  /** Where mode→job should lead */
+  /** wild = BEAST-001 main; adventure = legacy RPG; realm = CATCH side */
+  playMode: 'adventure' | 'realm' | 'wild'
+  /** Where mode→job should lead (legacy / realm) */
   pendingPath: 'adventure' | 'realm'
+  /** BRIEF-BEAST-001 */
+  playerGender: PlayerGender | null
+  playerBeast: BeastDef | null
+  wildBeast: BeastDef | null
+  storyIndex: number
+  beastPromptDraft: string
   realmQueue: SpiritDef[]
   realmIndex: number
   spirit: SpiritDef | null
@@ -243,8 +266,13 @@ const state: State = {
   blockCharges: 0,
   dodgeCharges: 0,
   firstStrikeDone: false,
-  playMode: 'adventure',
+  playMode: 'wild',
   pendingPath: 'adventure',
+  playerGender: null,
+  playerBeast: null,
+  wildBeast: null,
+  storyIndex: 0,
+  beastPromptDraft: '',
   realmQueue: [],
   realmIndex: 0,
   spirit: null,
@@ -353,17 +381,31 @@ function stageInstruction(): string {
 }
 
 function chibiHeroHtml(): string {
+  if ((state.playMode === 'wild' || state.playMode === 'realm') && state.playerBeast) {
+    const b = state.playerBeast
+    return `
+    <div class="fighter hero portrait-wrap beast-fighter" id="hero" style="--beast-a:${b.tint};--beast-b:${b.tint2}">
+      ${beastPlaceholderHtml(b, 'fight-beast')}
+    </div>`
+  }
   const j = job()
   const cls = j?.cssClass ?? 'job-swordsman'
   const id = (j?.id ?? 'swordsman') as JobId
   const file = JOB_ART[id]
   return `
     <div class="fighter hero portrait-wrap ${cls}" id="hero">
-      ${portraitImg(file, j?.name ?? '挑戰者', 'portrait-fight')}
+      ${portraitImg(file, j?.name ?? '訓練師', 'portrait-fight')}
     </div>`
 }
 
 function chibiMonsterHtml(): string {
+  if (state.playMode === 'wild' && state.wildBeast) {
+    const b = state.wildBeast
+    return `
+    <div class="fighter monster portrait-wrap beast-fighter" id="monster" style="--beast-a:${b.tint};--beast-b:${b.tint2}">
+      ${beastPlaceholderHtml(b, 'fight-beast')}
+    </div>`
+  }
   if (state.playMode === 'realm' && state.spirit) {
     const s = state.spirit
     return `
@@ -377,8 +419,23 @@ function chibiMonsterHtml(): string {
   }
   return `
     <div class="fighter monster portrait-wrap" id="monster">
-      ${portraitImg(MONSTER_ART, '魔物', 'portrait-fight')}
+      ${portraitImg(MONSTER_ART, '野生智能獸', 'portrait-fight')}
     </div>`
+}
+
+function fighterLabelLeft(): string {
+  if (state.playerBeast && (state.playMode === 'wild' || state.playMode === 'realm')) {
+    return state.playerBeast.name
+  }
+  return job()?.name ?? '訓練師'
+}
+
+function fighterLabelRight(): string {
+  if (state.playMode === 'wild' && state.wildBeast) return state.wildBeast.name
+  if (state.playMode === 'realm' && state.spirit) {
+    return `${state.spirit.name}（${rarityLabel(state.spirit.rarity)}）`
+  }
+  return '野生智能獸'
 }
 
 function render() {
@@ -386,25 +443,25 @@ function render() {
     const speechOk = isSpeechSupported()
     app.innerHTML = `
       <div class="screen title-screen active">
-        <div class="title-badge">AI 讀音之戰</div>
+        <div class="title-badge">AI 次世界</div>
         <h1 class="game-title">AI智能獸之讀音之戰</h1>
-        <p class="subtitle">選職業、逛商店，再用麥克風（或打字）唸出口令出招！</p>
+        <p class="subtitle">創造智能獸，用讀音在野外對戰！</p>
         <div class="mode-row">
-          <button class="btn btn-zhuyin" data-mode="zhuyin" type="button">注音語音版</button>
-          <button class="btn btn-english" data-mode="english" type="button">英文語音版</button>
-        </div>
-        <div class="title-extra-row mode-row">
-          <button class="btn btn-english" id="btn-realm" type="button">靈域探索</button>
-          <button class="btn btn-ghost" id="btn-codex" type="button">圖鑑</button>
+          <button class="btn btn-zhuyin" id="btn-start" type="button">開始</button>
+          ${
+            state.playerBeast
+              ? `<button class="btn btn-english" id="btn-hub" type="button">進入據點</button>`
+              : ''
+          }
         </div>
         <div class="howto">
-          <strong>冒險流程</strong><br/>
-          · 選模式 → 選職業 → 商店（可跳過）→ 戰鬥<br/>
-          · <strong>靈域探索</strong>：選模式／職業後遇印靈；壓血至門檻→施印→圖鑑（只收藏）<br/>
+          <strong>訓練師流程</strong><br/>
+          · 選性別 → 故事 → 關鍵字喚獸 → 據點<br/>
+          · <strong>野外遭遇</strong>：與野生智能獸讀音對戰（語音或打字）<br/>
           · <strong>注音</strong>：先唸「音」，再唸漢字 · <strong>英文</strong>：先拼字母，再說單字<br/>
-          · 兩階段綠燈 → 攻擊；失敗／逾時 → 魔物反擊（可用技能／道具）<br/>
-          · 語音不可用時可在戰鬥畫面用<strong>打字 fallback</strong>（輸入框會提示當前答案）<br/>
-          · <strong>品管／無麥</strong>：長按標題 1.2 秒 → 模擬勝利（金幣→可回商店）
+          · 兩階段綠燈 → 攻擊；失敗／逾時 → 對方反擊<br/>
+          · 語音不可用時可用<strong>打字 fallback</strong><br/>
+          · <strong>品管／無麥</strong>：長按標題 1.2 秒 → 模擬勝利
           ${
             speechOk
               ? ''
@@ -413,35 +470,186 @@ function render() {
         </div>
       </div>
     `
-    app.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((btn) => {
+    app.querySelector('#btn-start')!.addEventListener('click', () => {
+      state.screen = 'gender'
+      state.storyIndex = 0
+      render()
+    })
+    app.querySelector('#btn-hub')?.addEventListener('click', () => {
+      state.screen = 'hub'
+      render()
+    })
+    wireTitleLongPressQa()
+    return
+  }
+
+  if (state.screen === 'gender') {
+    app.innerHTML = `
+      <div class="screen gender-screen active">
+        <div class="panel-head">
+          <div class="title-badge">AI智能獸之讀音之戰</div>
+          <h2>選擇性別</h2>
+          <p class="panel-sub">訓練師的外觀標記（僅存於本機狀態）</p>
+        </div>
+        <div class="mode-row gender-row">
+          <button class="btn btn-zhuyin gender-btn" data-gender="male" type="button">男</button>
+          <button class="btn btn-english gender-btn" data-gender="female" type="button">女</button>
+        </div>
+        <div class="mode-row">
+          <button class="btn btn-ghost" data-back-title type="button">回標題</button>
+        </div>
+      </div>
+    `
+    app.querySelectorAll<HTMLButtonElement>('[data-gender]').forEach((btn) => {
       btn.addEventListener('click', () => {
-        state.mode = btn.dataset.mode as GameMode
-        state.pendingPath = 'adventure'
-        state.playMode = 'adventure'
-        state.screen = 'select'
+        state.playerGender = btn.dataset.gender as PlayerGender
+        state.storyIndex = 0
+        state.screen = 'story'
         render()
       })
     })
-    app.querySelector('#btn-realm')!.addEventListener('click', () => {
-      state.pendingPath = 'realm'
-      state.playMode = 'realm'
-      if (state.mode && state.jobId) {
-        beginRealmEntry()
+    app.querySelector('[data-back-title]')!.addEventListener('click', () => {
+      state.screen = 'title'
+      render()
+    })
+    return
+  }
+
+  if (state.screen === 'story') {
+    const i = Math.max(0, Math.min(state.storyIndex, STORY_SLIDES.length - 1))
+    const slide = STORY_SLIDES[i]!
+    const last = i >= STORY_SLIDES.length - 1
+    app.innerHTML = `
+      <div class="screen story-screen active" id="story-tap">
+        <div class="panel-head">
+          <div class="title-badge">AI智能獸之讀音之戰</div>
+          <h2>序章 ${i + 1}/${STORY_SLIDES.length}</h2>
+        </div>
+        <div class="story-card story-anim">
+          <div class="story-orb" aria-hidden="true"></div>
+          <p class="story-text">${escapeHtml(slide)}</p>
+        </div>
+        <p class="panel-sub story-hint">點畫面或按鈕繼續</p>
+        <div class="mode-row">
+          <button class="btn btn-zhuyin" id="btn-story-next" type="button">${last ? '喚出智能獸' : '下一頁'}</button>
+          <button class="btn btn-ghost" id="btn-story-skip" type="button">跳過</button>
+        </div>
+      </div>
+    `
+    const advance = () => {
+      if (state.storyIndex >= STORY_SLIDES.length - 1) {
+        state.screen = 'prompt-beast'
+        state.beastPromptDraft = ''
+        render()
         return
       }
-      const hint = document.querySelector('.subtitle')
-      if (hint) hint.textContent = '靈域探索：請先選注音／英文模式，再選職業'
-      // Mode buttons already wired; re-wire them for realm pendingPath
-      app.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((btn) => {
-        const clone = btn.cloneNode(true) as HTMLButtonElement
-        btn.replaceWith(clone)
-        clone.addEventListener('click', () => {
-          state.mode = clone.dataset.mode as GameMode
-          state.pendingPath = 'realm'
-          state.playMode = 'realm'
-          state.screen = 'select'
+      state.storyIndex += 1
+      render()
+    }
+    app.querySelector('#btn-story-next')!.addEventListener('click', (e) => {
+      e.stopPropagation()
+      advance()
+    })
+    app.querySelector('#btn-story-skip')!.addEventListener('click', (e) => {
+      e.stopPropagation()
+      state.screen = 'prompt-beast'
+      state.beastPromptDraft = ''
+      render()
+    })
+    app.querySelector('#story-tap')!.addEventListener('click', (e) => {
+      const t = e.target as HTMLElement
+      if (t.closest('button')) return
+      advance()
+    })
+    return
+  }
+
+  if (state.screen === 'prompt-beast') {
+    const draft = state.beastPromptDraft
+    const preview = createBeastFromPrompt(draft || DEFAULT_BEAST_NAME)
+    app.innerHTML = `
+      <div class="screen prompt-beast-screen active">
+        <div class="panel-head">
+          <div class="title-badge">AI智能獸之讀音之戰</div>
+          <h2>喚出第一隻智能獸</h2>
+          <p class="panel-sub">輸入關鍵字（無需 AI API · 占位立繪）</p>
+        </div>
+        <div class="beast-preview-wrap">
+          ${beastPlaceholderHtml(preview, 'preview-beast')}
+        </div>
+        <label class="beast-prompt-label" for="beast-prompt">關鍵字</label>
+        <textarea id="beast-prompt" class="beast-prompt-input" rows="3" placeholder="例：火焰 狐狸 迅捷" maxlength="80">${escapeHtml(draft)}</textarea>
+        <p class="panel-sub">名稱預覽：<strong>${escapeHtml(preview.name)}</strong> · 關鍵字回顯：${escapeHtml(preview.keywords.join(' · '))}</p>
+        <div class="mode-row">
+          <button class="btn btn-zhuyin" id="btn-create-beast" type="button">確認創造</button>
+          <button class="btn btn-ghost" data-back-story type="button">回故事</button>
+        </div>
+      </div>
+    `
+    const ta = app.querySelector<HTMLTextAreaElement>('#beast-prompt')!
+    ta.addEventListener('input', () => {
+      state.beastPromptDraft = ta.value
+      const p = createBeastFromPrompt(ta.value || DEFAULT_BEAST_NAME)
+      const wrap = app.querySelector('.beast-preview-wrap')
+      if (wrap) wrap.innerHTML = beastPlaceholderHtml(p, 'preview-beast')
+      const sub = app.querySelectorAll('.panel-sub')[1]
+      if (sub) {
+        sub.innerHTML = `名稱預覽：<strong>${escapeHtml(p.name)}</strong> · 關鍵字回顯：${escapeHtml(p.keywords.join(' · '))}`
+      }
+    })
+    app.querySelector('#btn-create-beast')!.addEventListener('click', () => {
+      state.beastPromptDraft = ta.value
+      state.playerBeast = createBeastFromPrompt(ta.value.trim() || DEFAULT_BEAST_NAME)
+      state.playMode = 'wild'
+      state.screen = 'hub'
+      render()
+    })
+    app.querySelector('[data-back-story]')!.addEventListener('click', () => {
+      state.storyIndex = STORY_SLIDES.length - 1
+      state.screen = 'story'
+      render()
+    })
+    return
+  }
+
+  if (state.screen === 'hub') {
+    const b = state.playerBeast
+    const genderLabel =
+      state.playerGender === 'female' ? '女訓練師' : state.playerGender === 'male' ? '男訓練師' : '訓練師'
+    app.innerHTML = `
+      <div class="screen hub-screen active">
+        <div class="panel-head">
+          <div class="title-badge">AI智能獸之讀音之戰</div>
+          <h2>訓練師據點</h2>
+          <p class="panel-sub">${escapeHtml(genderLabel)} · 🪙 ${state.gold}</p>
+        </div>
+        <div class="hub-beast">
+          ${b ? beastPlaceholderHtml(b, 'hub-beast') : '<p class="panel-sub">尚未創造智能獸</p>'}
+          ${b ? `<p class="panel-sub">${escapeHtml(b.blurb)}</p>` : ''}
+        </div>
+        <div class="mode-row">
+          <button class="btn btn-zhuyin" data-mode="zhuyin" type="button">注音野外遭遇</button>
+          <button class="btn btn-english" data-mode="english" type="button">英文野外遭遇</button>
+        </div>
+        <div class="mode-row title-extra-row">
+          <button class="btn btn-ghost" id="btn-codex" type="button">圖鑑</button>
+          <button class="btn btn-ghost" id="btn-realm" type="button">靈域（側路徑）</button>
+          <button class="btn btn-ghost" id="btn-recreate" type="button">重新喚獸</button>
+          <button class="btn btn-ghost" data-title type="button">回標題</button>
+        </div>
+        <p class="howto hub-howto">主路徑不開放四職業選角與商店。讀音核心：語音／打字兩階段出招。</p>
+      </div>
+    `
+    app.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        if (!state.playerBeast) {
+          state.screen = 'prompt-beast'
           render()
-        })
+          return
+        }
+        state.mode = btn.dataset.mode as GameMode
+        state.playMode = 'wild'
+        void startWildFight()
       })
     })
     app.querySelector('#btn-codex')!.addEventListener('click', () => {
@@ -449,7 +657,20 @@ function render() {
       state.codexSelectedId = null
       render()
     })
-    wireTitleLongPressQa()
+    app.querySelector('#btn-realm')!.addEventListener('click', () => {
+      if (!state.mode) state.mode = 'zhuyin'
+      if (!state.jobId) state.jobId = 'swordsman'
+      if (!state.playerBeast) {
+        state.playerBeast = createBeastFromPrompt(DEFAULT_BEAST_NAME)
+      }
+      beginRealmEntry()
+    })
+    app.querySelector('#btn-recreate')!.addEventListener('click', () => {
+      state.beastPromptDraft = ''
+      state.screen = 'prompt-beast'
+      render()
+    })
+    app.querySelector('[data-title]')!.addEventListener('click', () => goTitleFresh())
     return
   }
 
@@ -557,6 +778,9 @@ function render() {
     const win = state.result === 'win'
     voice.stop()
     const j = job()
+    const isWild = state.playMode === 'wild' || !!state.playerBeast
+    const foe = state.wildBeast?.name ?? '野生智能獸'
+    const self = state.playerBeast?.name ?? (j ? j.name : '訓練師')
     app.innerHTML = `
       <div class="screen result-screen active ${win ? 'win' : 'lose'}">
         <div class="title-badge">AI智能獸之讀音之戰</div>
@@ -564,47 +788,38 @@ function render() {
         <p class="result-msg">
           ${
             win
-              ? `魔物倒下了！獲得 🪙 <strong>${state.lastWinGold}</strong> 金幣（現有 ${state.gold}）。`
-              : '挑戰者力竭倒下。道具仍保留，再試一次吧！'
+              ? `${escapeHtml(foe)}倒下了！獲得 🪙 <strong>${state.lastWinGold}</strong> 金幣（現有 ${state.gold}）。`
+              : `${escapeHtml(self)}力竭倒下。回據點休整再試吧！`
           }
         </p>
         <p class="result-msg">
-          ${j ? escapeHtml(j.name) : '挑戰者'} · 回合 ${state.round} ·
+          ${escapeHtml(self)} · 回合 ${state.round} ·
           ${state.mode === 'zhuyin' ? '注音' : '英文'}
         </p>
         <div class="mode-row">
-          ${
-            win
-              ? `<button class="btn btn-english" data-to-shop type="button">回商店</button>
-                 <button class="btn btn-zhuyin" data-again type="button">再戰一場</button>`
-              : `<button class="btn btn-zhuyin" data-again type="button">再戰一場</button>
-                 <button class="btn btn-english" data-to-shop type="button">回商店補貨</button>`
-          }
-          <button class="btn btn-english" id="btn-realm" type="button">靈域探索</button>
+          <button class="btn btn-zhuyin" data-again type="button">再戰一場</button>
+          <button class="btn btn-english" data-to-hub type="button">回據點</button>
           <button class="btn btn-ghost" id="btn-codex" type="button">圖鑑</button>
-          <button class="btn btn-ghost" data-reselect type="button">重選職業</button>
+          <button class="btn btn-ghost" id="btn-realm" type="button">靈域（側）</button>
           <button class="btn btn-ghost" data-title type="button">回標題</button>
         </div>
       </div>
     `
     app.querySelector('[data-again]')?.addEventListener('click', () => {
+      if (isWild && state.playerBeast) {
+        void startWildFight()
+        return
+      }
       void startFight()
     })
-    app.querySelector('[data-to-shop]')?.addEventListener('click', () => {
-      state.screen = 'shop'
-      render()
-    })
-    app.querySelector('[data-reselect]')?.addEventListener('click', () => {
-      state.screen = 'select'
+    app.querySelector('[data-to-hub]')?.addEventListener('click', () => {
+      state.playMode = 'wild'
+      state.screen = 'hub'
       render()
     })
     app.querySelector('#btn-realm')!.addEventListener('click', () => {
-      if (!state.mode || !state.jobId) {
-        state.pendingPath = 'realm'
-        state.screen = 'title'
-        render()
-        return
-      }
+      if (!state.mode) state.mode = 'zhuyin'
+      if (!state.jobId) state.jobId = 'swordsman'
       beginRealmEntry()
     })
     app.querySelector('#btn-codex')!.addEventListener('click', () => {
@@ -636,12 +851,10 @@ function render() {
   const timerPct = state.timeMax > 0 ? clamp((state.timeLeft / state.timeMax) * 100, 0, 100) : 0
   const stage1Cls = stage1Passed || state.stage === 2 ? 'done' : state.stage === 1 ? 'current' : ''
   const stage2Cls = state.stage === 2 ? 'current' : stage1Passed ? '' : 'locked'
-  const j = job()!
-
-  const monName =
-    state.playMode === 'realm' && state.spirit
-      ? `${state.spirit.name}（${rarityLabel(state.spirit.rarity)}）`
-      : '魔物'
+  const j = job()
+  const leftName = fighterLabelLeft()
+  const monName = fighterLabelRight()
+  const isWild = state.playMode === 'wild'
   const sealSrc = `${import.meta.env.BASE_URL}art/catch/seal.png`
   // Sync flag from live HP before paint (covers missed maybeEnter calls)
   if (inRealmFight() && state.spirit && !state.sealOpen) {
@@ -662,10 +875,10 @@ function render() {
       <div class="fight-brand title-badge">AI智能獸之讀音之戰</div>
       <div class="hud">
         <div class="hp-block">
-          <div class="hp-label">${escapeHtml(j.name)} ${Math.ceil(state.heroHp)}</div>
+          <div class="hp-label">${escapeHtml(leftName)} ${Math.ceil(state.heroHp)}</div>
           <div class="hp-bar"><div class="hp-fill hero" style="width:${(state.heroHp / MAX_HP) * 100}%"></div></div>
         </div>
-        <div class="round-chip">${state.playMode === 'realm' ? `靈域 ${state.realmIndex + 1}/${Math.max(1, state.realmQueue.length)} · ` : ''}第 ${state.round} 回合 · 🪙${state.gold}</div>
+        <div class="round-chip">${state.playMode === 'realm' ? `靈域 ${state.realmIndex + 1}/${Math.max(1, state.realmQueue.length)} · ` : isWild ? '野外 · ' : ''}第 ${state.round} 回合 · 🪙${state.gold}</div>
         <div class="hp-block monster">
           <div class="hp-label">${escapeHtml(monName)} ${Math.ceil(state.monsterHp)} ${
           state.playMode === 'realm' && state.spirit
@@ -713,7 +926,7 @@ function render() {
       <div class="buff-row" id="buff-row">
         ${state.blockCharges > 0 ? `<span class="buff-chip">護盾×${state.blockCharges}</span>` : ''}
         ${state.dodgeCharges > 0 ? `<span class="buff-chip dodge">影遁×${state.dodgeCharges}</span>` : ''}
-        ${j.damageMult > 1 ? `<span class="buff-chip">傷×${j.damageMult}</span>` : ''}
+        ${!isWild && j && j.damageMult > 1 ? `<span class="buff-chip">傷×${j.damageMult}</span>` : ''}
       </div>
 
       <div class="stage" id="stage">
@@ -724,9 +937,12 @@ function render() {
         <div class="fx-slash" id="fx-slash"><div class="lottie-box" id="lottie-box"></div></div>
       </div>
 
-      <div class="action-bar" id="action-bar">
+      ${
+        isWild
+          ? `<div class="action-bar action-bar-wild" id="action-bar"><span class="buff-chip">智能獸讀音對戰</span></div>`
+          : `<div class="action-bar" id="action-bar">
         <button type="button" class="act-btn skill" data-skill ${state.skillLeft <= 0 ? 'disabled' : ''}>
-          ${escapeHtml(j.skillName)} <span class="act-count">${state.skillLeft}</span>
+          ${escapeHtml(j?.skillName ?? '技能')} <span class="act-count">${state.skillLeft}</span>
         </button>
         ${ITEMS.map((it) => {
           const n = state.inventory[it.id]
@@ -734,7 +950,8 @@ function render() {
             ${escapeHtml(it.name)} <span class="act-count">${n}</span>
           </button>`
         }).join('')}
-      </div>
+      </div>`
+      }
 
 
       ${
@@ -797,6 +1014,15 @@ function wireFightControls() {
   })
 
   document.querySelector('#btn-quit')?.addEventListener('click', () => {
+    if (state.playMode === 'wild' && state.playerBeast) {
+      voice.stop()
+      stopLoop()
+      window.onkeydown = null
+      state.screen = 'hub'
+      state.phase = 'idle'
+      render()
+      return
+    }
     goTitleFresh()
   })
 
@@ -1136,6 +1362,38 @@ function spawnFloat(cls: string, text: string) {
   setTimeout(() => el.remove(), 800)
 }
 
+async function startWildFight() {
+  if (!state.mode || !state.playerBeast) return
+  const ok = await voice.ensurePermission()
+  state.playMode = 'wild'
+  state.wildBeast = pickWildBeast(state.playerBeast.id)
+  state.spirit = null
+  state.catchReady = false
+  state.realmKnockout = false
+  state.sealOpen = false
+  state.screen = 'fight'
+  state.heroHp = MAX_HP
+  state.monsterHp = MAX_HP
+  state.round = 0
+  state.deck = createPromptDeck(state.mode)
+  state.deckIndex = 0
+  state.result = null
+  state.lastWinGold = 0
+  state.heard = ''
+  state.skillLeft = 0
+  state.blockCharges = 0
+  state.dodgeCharges = 0
+  state.firstStrikeDone = true
+  state.status = ok
+    ? `${state.playerBeast.name} vs ${state.wildBeast.name}！`
+    : '請點「啟用麥克風」或使用打字 fallback'
+  voice.setLang(speechLang(state.mode))
+  render()
+  nextRound()
+  startLoop()
+  if (ok) voice.start()
+}
+
 async function startFight() {
   if (!state.mode || !state.jobId) return
   const ok = await voice.ensurePermission()
@@ -1280,20 +1538,16 @@ function updateHpBars() {
   const monFill = document.querySelector<HTMLElement>('.hp-fill.monster')
   const heroLabel = document.querySelector('.hp-block:not(.monster) .hp-label')
   const monLabel = document.querySelector('.hp-block.monster .hp-label')
-  const j = job()
   if (heroFill) heroFill.style.width = `${(state.heroHp / MAX_HP) * 100}%`
   if (monFill) monFill.style.width = `${(state.monsterHp / MAX_HP) * 100}%`
-  if (heroLabel) heroLabel.textContent = `${j?.name ?? '挑戰者'} ${Math.ceil(state.heroHp)}`
+  if (heroLabel) heroLabel.textContent = `${fighterLabelLeft()} ${Math.ceil(state.heroHp)}`
   if (monLabel) {
-    const monName =
-      state.playMode === 'realm' && state.spirit
-        ? `${state.spirit.name}`
-        : '魔物'
     if (state.playMode === 'realm' && state.spirit) {
+      const monName = state.spirit.name
       const ready = state.catchReady || state.realmKnockout || isCatchReady(state.monsterHp, state.spirit.rarity)
       monLabel.innerHTML = `${escapeHtml(monName)} ${Math.ceil(state.monsterHp)} <span class="threshold-chip ${ready ? 'ready' : ''}">門檻≤${catchThreshold(state.spirit.rarity)}</span>`
     } else {
-      monLabel.textContent = `${monName} ${Math.ceil(state.monsterHp)}`
+      monLabel.textContent = `${fighterLabelRight()} ${Math.ceil(state.monsterHp)}`
     }
   }
   const status = document.querySelector('#status')
@@ -1311,7 +1565,7 @@ function endFight() {
     return
   }
   if (state.playMode === 'realm' && state.heroHp <= 0) {
-    state.lastCatchMsg = '挑戰者力竭 — 未收入印靈。'
+    state.lastCatchMsg = '訓練師力竭 — 未收入印靈。'
     state.screen = 'realm-result'
     window.onkeydown = null
     render()
@@ -1409,7 +1663,7 @@ function renderRealmScreen() {
         <p class="panel-sub">
           本趟將遭遇 <strong>${q.length}</strong> 隻印靈（${REALM_ENCOUNTERS_MIN}–${REALM_ENCOUNTERS_MAX}）
           · 模式：${state.mode === 'zhuyin' ? '注音' : '英文'}
-          · ${state.jobId ? escapeHtml(getJob(state.jobId).name) : '未選職業'}
+          · ${state.playerBeast ? escapeHtml(state.playerBeast.name) : '智能獸'}
         </p>
       </div>
       <div class="realm-queue">
@@ -1519,14 +1773,22 @@ function renderCodexScreen() {
   app.querySelector('#btn-realm')?.addEventListener('click', () => {
     state.pendingPath = 'realm'
     state.playMode = 'realm'
-    if (!state.mode || !state.jobId) {
-      state.screen = 'title'
-      render()
-      return
-    }
+    if (!state.mode) state.mode = 'zhuyin'
+    if (!state.jobId) state.jobId = 'swordsman'
     beginRealmEntry()
   })
-  app.querySelector('[data-title]')!.addEventListener('click', () => goTitleFresh())
+  const back = app.querySelector('[data-title]')
+  if (back) {
+    back.addEventListener('click', () => {
+      if (state.playerBeast) {
+        state.screen = 'hub'
+        render()
+        return
+      }
+      goTitleFresh()
+    })
+    if (state.playerBeast) back.textContent = '回據點'
+  }
 }
 
 function renderRealmResultScreen() {
@@ -1539,7 +1801,7 @@ function renderRealmResultScreen() {
       <div class="mode-row">
         <button class="btn btn-zhuyin" id="btn-realm" type="button">再探靈域</button>
         <button class="btn btn-english" id="btn-codex" type="button">圖鑑</button>
-        <button class="btn btn-ghost" data-to-shop type="button">回商店</button>
+        <button class="btn btn-ghost" data-to-hub type="button">回據點</button>
         <button class="btn btn-ghost" data-title type="button">回標題</button>
       </div>
     </div>
@@ -1550,10 +1812,9 @@ function renderRealmResultScreen() {
     state.codexSelectedId = null
     render()
   })
-  app.querySelector('[data-to-shop]')!.addEventListener('click', () => {
-    state.playMode = 'adventure'
-    state.pendingPath = 'adventure'
-    state.screen = 'shop'
+  app.querySelector('[data-to-hub]')!.addEventListener('click', () => {
+    state.playMode = 'wild'
+    state.screen = 'hub'
     render()
   })
   app.querySelector('[data-title]')!.addEventListener('click', () => goTitleFresh())

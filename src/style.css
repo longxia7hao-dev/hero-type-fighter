@@ -1431,3 +1431,108 @@ h1.game-title {
   padding: 2px 0 4px;
   flex-shrink: 0;
 }
+
+
+/* —— BRIEF-BEAST-001 —— */
+.gender-row { gap: 16px; }
+.gender-btn { min-width: 120px; min-height: 64px; font-size: 1.25rem; }
+
+.story-screen { align-items: center; gap: 12px; }
+.story-card {
+  position: relative;
+  width: min(520px, 100%);
+  min-height: 180px;
+  padding: 28px 22px;
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(74, 42, 106, 0.85), rgba(26, 15, 58, 0.9));
+  border: 1px solid var(--gold-edge);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.35);
+  overflow: hidden;
+}
+.story-orb {
+  position: absolute;
+  right: -30px; top: -30px;
+  width: 140px; height: 140px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(201,180,255,0.55), transparent 70%);
+  animation: story-pulse 2.8s ease-in-out infinite;
+}
+.story-text {
+  position: relative;
+  margin: 0;
+  font-size: clamp(1.05rem, 3.5vw, 1.25rem);
+  line-height: 1.7;
+  text-align: center;
+}
+.story-hint { opacity: 0.7; }
+.story-anim { animation: story-in 0.45s ease; }
+@keyframes story-in {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes story-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.7; }
+  50% { transform: scale(1.15); opacity: 1; }
+}
+
+.prompt-beast-screen, .hub-screen, .gender-screen {
+  align-items: center;
+  gap: 12px;
+}
+.beast-prompt-label {
+  align-self: stretch;
+  max-width: 480px;
+  width: 100%;
+  font-size: 0.9rem;
+  color: var(--gold-dim);
+}
+.beast-prompt-input {
+  width: min(480px, 100%);
+  resize: vertical;
+  border-radius: 12px;
+  border: 1px solid var(--gold-edge);
+  background: rgba(10, 6, 28, 0.75);
+  color: #f5f0ff;
+  padding: 12px 14px;
+  font: inherit;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.beast-preview-wrap, .hub-beast {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.beast-slot {
+  --beast-a: #c9b4ff;
+  --beast-b: #4a2a6a;
+  width: 140px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.beast-orb {
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, var(--beast-a), var(--beast-b));
+  box-shadow: 0 0 24px color-mix(in srgb, var(--beast-a) 45%, transparent),
+              inset 0 -8px 18px rgba(0,0,0,0.25);
+  display: grid;
+  place-items: center;
+  animation: story-pulse 3.2s ease-in-out infinite;
+}
+.beast-silhouette { width: 64px; height: 64px; }
+.beast-name { font-weight: 700; color: var(--gold); text-align: center; }
+.beast-kw { font-size: 0.75rem; opacity: 0.8; text-align: center; max-width: 140px; }
+.beast-slot.fight-beast { width: 100px; }
+.beast-slot.fight-beast .beast-orb { width: 88px; height: 88px; }
+.beast-slot.fight-beast .beast-kw { display: none; }
+.beast-fighter .beast-slot { pointer-events: none; }
+.action-bar-wild {
+  justify-content: center;
+  opacity: 0.9;
+}
+.hub-howto { max-width: 520px; text-align: left; }
