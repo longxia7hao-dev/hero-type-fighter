@@ -1409,8 +1409,8 @@ h1.game-title {
 /* HOTFIX: title full moon readable (select/fight frozen) */
 .title-screen::before {
   background-image:
-    linear-gradient(180deg, rgba(12, 6, 28, 0.05) 0%, rgba(10, 6, 24, 0.3) 40%, rgba(6, 3, 16, 0.8) 100%),
+    linear-gradient(180deg, rgba(12, 6, 28, 0.02) 0%, rgba(10, 6, 24, 0.25) 38%, rgba(6, 3, 16, 0.8) 100%),
     var(--title-bg, var(--castle-bg, none));
-  background-position: 70% 8%;
+  background-position: 92% 0%;
   background-size: cover;
 }
