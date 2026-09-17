@@ -25,7 +25,7 @@
 | 掛點 | 內容 |
 |------|------|
 | `HudTitleBadge` | TYPE FIGHTER（金小標） |
-| `HudGameTitle` | 勇者拼音快打 |
+| `HudGameTitle` | AI智能獸之讀音之戰（RENAME-001） |
 | `HudSubtitle` | 一句玩法說明 |
 | `BtnModeZhuyin`／`BtnModeEnglish` | 注音版／英文版 |
 

@@ -1413,3 +1413,21 @@ h1.game-title {
   background-position: 78% 14%;
   background-repeat: no-repeat;
 }
+
+
+/* Brand chip on select/shop/fight/result/realm/codex */
+.panel-head .title-badge,
+.fight-brand.title-badge,
+.result-screen > .title-badge,
+.realm-result-screen > .title-badge {
+  letter-spacing: 0.08em;
+  text-transform: none;
+  margin-bottom: 4px;
+  font-size: clamp(0.65rem, 2vw, 0.8rem);
+  opacity: 0.9;
+}
+.fight-brand.title-badge {
+  text-align: center;
+  padding: 2px 0 4px;
+  flex-shrink: 0;
+}

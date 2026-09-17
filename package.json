@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "勇者拼音快打 — 注音／英文打字格鬥 Prototype",
+  "description": "AI智能獸之讀音之戰 — 注音／英文語音讀音對戰 Prototype",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",

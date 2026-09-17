@@ -386,8 +386,8 @@ function render() {
     const speechOk = isSpeechSupported()
     app.innerHTML = `
       <div class="screen title-screen active">
-        <div class="title-badge">JRPG VOICE QUEST</div>
-        <h1 class="game-title">勇者拼音快打</h1>
+        <div class="title-badge">AI 讀音之戰</div>
+        <h1 class="game-title">AI智能獸之讀音之戰</h1>
         <p class="subtitle">選職業、逛商店，再用麥克風（或打字）唸出口令出招！</p>
         <div class="mode-row">
           <button class="btn btn-zhuyin" data-mode="zhuyin" type="button">注音語音版</button>
@@ -457,6 +457,7 @@ function render() {
     app.innerHTML = `
       <div class="screen select-screen active">
         <div class="panel-head">
+          <div class="title-badge">AI智能獸之讀音之戰</div>
           <h2>選擇職業</h2>
           <p class="panel-sub">日系 Q 版勇者 · 模式：${state.mode === 'zhuyin' ? '注音' : '英文'}</p>
         </div>
@@ -501,6 +502,7 @@ function render() {
     app.innerHTML = `
       <div class="screen shop-screen active">
         <div class="panel-head">
+          <div class="title-badge">AI智能獸之讀音之戰</div>
           <h2>冒險商店</h2>
           <p class="panel-sub">
             <span class="gold-chip">🪙 ${state.gold}</span>
@@ -557,6 +559,7 @@ function render() {
     const j = job()
     app.innerHTML = `
       <div class="screen result-screen active ${win ? 'win' : 'lose'}">
+        <div class="title-badge">AI智能獸之讀音之戰</div>
         <h2>${win ? '勝利！' : '敗北…'}</h2>
         <p class="result-msg">
           ${
@@ -656,6 +659,7 @@ function render() {
 
   app.innerHTML = `
     <div class="screen fight-screen active ${state.playMode === 'realm' ? 'realm-fight' : ''}${showCatchUi ? ' is-catch-ready' : ''}">
+      <div class="fight-brand title-badge">AI智能獸之讀音之戰</div>
       <div class="hud">
         <div class="hp-block">
           <div class="hp-label">${escapeHtml(j.name)} ${Math.ceil(state.heroHp)}</div>
@@ -1400,6 +1404,7 @@ function renderRealmScreen() {
   app.innerHTML = `
     <div class="screen realm-screen active">
       <div class="panel-head">
+        <div class="title-badge">AI智能獸之讀音之戰</div>
         <h2>靈域探索</h2>
         <p class="panel-sub">
           本趟將遭遇 <strong>${q.length}</strong> 隻印靈（${REALM_ENCOUNTERS_MIN}–${REALM_ENCOUNTERS_MAX}）
@@ -1459,6 +1464,7 @@ function renderCodexScreen() {
   app.innerHTML = `
     <div class="screen dex-screen active" id="screen-codex">
       <div class="panel-head">
+        <div class="title-badge">AI智能獸之讀音之戰</div>
         <h2>印靈圖鑑</h2>
         <p class="panel-sub">只收藏 · 不可出戰 · 已印 ${list.length} 種</p>
       </div>
@@ -1526,6 +1532,7 @@ function renderCodexScreen() {
 function renderRealmResultScreen() {
   app.innerHTML = `
     <div class="screen realm-result-screen result-screen active">
+      <div class="title-badge">AI智能獸之讀音之戰</div>
       <h2>靈域結束</h2>
       <p class="result-msg">${escapeHtml(state.lastCatchMsg || '本趟探索結束。')}</p>
       <p class="result-msg">圖鑑收藏 ${loadCodex().length} 種 · 🪙 ${state.gold}</p>
