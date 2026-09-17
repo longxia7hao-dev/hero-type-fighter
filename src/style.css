@@ -1,6 +1,6 @@
 :root {
   /* UI-CASTLE-001 — night purple castle */
-  --bg-deep: #0a0618;
+  --bg-deep: #070414;
   --bg-mid: #1a0f3a;
   --castle-violet: #2a1558;
   --castle-glass: rgba(28, 14, 58, 0.72);
@@ -1340,7 +1340,7 @@ h1.game-title {
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: fill;
+  object-fit: cover;
   object-position: center center;
   z-index: 0;
   pointer-events: none;
