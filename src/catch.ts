@@ -29,7 +29,7 @@ export const CATCH_THRESHOLD: Record<SpiritRarity, number> = {
   common: 40,
   rare: 20,
 }
-export const ENCOUNTER_WEIGHT = { common: 0.7, rare: 0.3 } as const
+export const ENCOUNTER_WEIGHT = { common: 0.85, rare: 0.15 } as const
 export const WIN_GOLD_RARE_MULT = 1.5
 /** Realm run: encounter 2–3 spirits then return */
 export const REALM_ENCOUNTERS_MIN = 2
@@ -180,7 +180,15 @@ export function buildRealmQueue(): SpiritDef[] {
   const n =
     REALM_ENCOUNTERS_MIN +
     Math.floor(Math.random() * (REALM_ENCOUNTERS_MAX - REALM_ENCOUNTERS_MIN + 1))
-  return Array.from({ length: n }, () => rollSpirit())
+  // First encounter always common so QA can hit threshold ≤40 without rare RNG
+  const queue = [rollSpiritForced('common')]
+  while (queue.length < n) queue.push(rollSpirit())
+  return queue
+}
+
+export function rollSpiritForced(rarity: SpiritRarity): SpiritDef {
+  const pool = SPIRITS.filter((s) => s.rarity === rarity)
+  return pool[Math.floor(Math.random() * pool.length)]!
 }
 
 export function pickSealPrompt(mode: GameMode): VoicePrompt {

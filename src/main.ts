@@ -113,12 +113,12 @@ function goTitleFresh() {
 
 function typeFallbackPlaceholder(): string {
   if (!state.prompt) return '打字 fallback：輸入答案後送出'
-  const expected =
-    state.stage === 1
-      ? (state.prompt.stage1[0] ?? state.prompt.displayPrimary)
-      : (state.prompt.stage2[0] ?? state.prompt.displaySecondary)
-  const label = state.stage === 1 ? '階段①' : '階段②'
-  return `${label} 可打：${expected}`
+  const s1 = state.prompt.stage1[0] ?? state.prompt.displayPrimary
+  const s2 = state.prompt.stage2[0] ?? state.prompt.displaySecondary
+  if (state.stage === 1) {
+    return `①可打：${s1}　（或直接打②「${s2}」一次出招）`
+  }
+  return `②可打：${s2}　→ 送出才扣怪血`
 }
 
 /** QA / no-mic: force win → gold → result (shop reachable). Voice core untouched. */
@@ -692,13 +692,17 @@ function render() {
                 ${
                   state.realmKnockout
                     ? `<button type="button" class="btn btn-ghost" id="btn-knockout-gold">收下金幣離開</button>`
-                    : `<button type="button" class="btn btn-ghost" id="btn-flee-catch">逃</button>`
+                    : `<button type="button" class="btn btn-ghost" id="btn-flee-catch">逃</button>
+                <button type="button" class="btn btn-ghost" id="catch-qa-snap">【測】壓門檻</button>`
                 }
               </div>
               <p class="catch-ready-hint">出招已暫停 — 按「施印」開短題（語音或打字）</p>
             </div>`
           : inRealmFight()
-            ? `<div class="mode-row catch-flee-row" style="margin:4px 0"><button type="button" class="btn btn-ghost" id="btn-flee-catch">逃離靈域</button></div>`
+            ? `<div class="mode-row catch-flee-row" style="margin:4px 0">
+                <button type="button" class="btn btn-ghost" id="btn-flee-catch">逃離靈域</button>
+                <button type="button" class="btn btn-ghost" id="catch-qa-snap" title="測試：長按或點擊將怪血壓至門檻">【測】壓門檻</button>
+              </div>`
             : ''
       }
 
@@ -771,6 +775,7 @@ function render() {
   mountLottie()
   wireFightControls()
   wireRealmFightExtras()
+  wireRealmQaSnapShortcut()
   if (state.sealOpen) mountSealModal()
 }
 
@@ -915,24 +920,42 @@ async function tryMatch(transcript: string, isFinal = true) {
     return
   }
 
+  // Typing UX: if still on stage① but input already matches stage②, skip straight to damage
+  if (
+    state.stage === 1 &&
+    matchStage(state.mode, 2, transcript, state.prompt.stage2)
+  ) {
+    stage1Passed = true
+    state.stage = 2
+    state.phase = 'resolving'
+    state.status = '①② 一次過！出招'
+    lightPromptTarget('primary')
+    lightPromptTarget('secondary')
+    updateVoiceHud()
+    await wait(220)
+    if (state.screen !== 'fight' || !state.prompt) return
+    void resolveSuccess()
+    return
+  }
+
   state.phase = 'resolving'
 
   if (state.stage === 1) {
     stage1Passed = true
     state.heard = ''
-    state.status = '① 綠燈！這段音對了'
+    state.status = '① 綠燈！這段音對了 → 再打／唸②'
     lightPromptTarget('primary')
     updateVoiceHud()
     await wait(STAGE_OK_HOLD_MS)
     if (state.screen !== 'fight' || !state.prompt) return
     state.stage = 2
-    state.status = '① 綠燈已亮 → 繼續唸第 ② 段'
+    state.status = '① 已過 → 請送出②答案才會扣怪血'
     state.phase = 'input'
     updateVoiceHud()
     return
   }
 
-  state.status = '② 綠燈！出招'
+  state.status = '② 綠燈！出招扣血'
   lightPromptTarget('secondary')
   updateVoiceHud()
   await wait(STAGE_OK_HOLD_MS)
@@ -1398,6 +1421,29 @@ function renderRealmScreen() {
   app.querySelector('#btn-realm-start')!.addEventListener('click', () => {
     void startRealmEncounter()
   })
+
+  // QA: long-press 靈域探索 title → snap after entering fight is via fight HUD;
+  // here long-press h2 also notes the shortcut in status for discoverability
+  {
+    const h2 = app.querySelector<HTMLElement>('.realm-screen h2')
+    if (h2) {
+      let t: number | null = null
+      const clear = () => { if (t != null) { window.clearTimeout(t); t = null } }
+      h2.addEventListener('pointerdown', () => {
+        clear()
+        t = window.setTimeout(() => {
+          t = null
+          state.status = '【測】進戰後：點【測】壓門檻，或長按怪血條／回合晶片'
+          // If already mid-fight somehow, snap
+          if (state.screen === 'fight') qaSnapMonsterToThreshold()
+          else render()
+        }, 900)
+      })
+      h2.addEventListener('pointerup', clear)
+      h2.addEventListener('pointerleave', clear)
+    }
+  }
+
   app.querySelector('#btn-codex')!.addEventListener('click', () => {
     state.screen = 'codex'
     state.codexSelectedId = null
@@ -1627,6 +1673,57 @@ function onRealmMonsterDown() {
   requestAnimationFrame(() => {
     document.querySelector('#btn-seal')?.scrollIntoView({ block: 'center', behavior: 'smooth' })
   })
+}
+
+
+/** QA: snap realm monster HP to catch threshold (does not auto-open seal). */
+function qaSnapMonsterToThreshold() {
+  if (!inRealmFight() || !state.spirit) return
+  if (state.sealOpen) return
+  const th = catchThreshold(state.spirit.rarity)
+  state.monsterHp = Math.min(state.monsterHp, th)
+  state.status = `【測試】已壓至門檻 HP=${Math.ceil(state.monsterHp)}≤${th} — 應出現可施印`
+  syncCatchReadyFromHp()
+  if (!state.catchReady) {
+    // force show even if sync somehow no-oped
+    state.catchReady = true
+    state.phase = 'idle'
+    stopLoop()
+    voice.stop()
+    render()
+  }
+}
+
+function wireRealmQaSnapShortcut() {
+  if (!inRealmFight()) return
+  document.querySelector('#catch-qa-snap')?.addEventListener('click', (e) => {
+    e.preventDefault()
+    qaSnapMonsterToThreshold()
+  })
+  const targets = [
+    document.querySelector<HTMLElement>('.hp-block.monster'),
+    document.querySelector<HTMLElement>('.round-chip'),
+  ].filter(Boolean) as HTMLElement[]
+  for (const el of targets) {
+    let timer: number | null = null
+    const clear = () => {
+      if (timer != null) {
+        window.clearTimeout(timer)
+        timer = null
+      }
+    }
+    const start = () => {
+      clear()
+      timer = window.setTimeout(() => {
+        timer = null
+        qaSnapMonsterToThreshold()
+      }, 900)
+    }
+    el.addEventListener('pointerdown', start)
+    el.addEventListener('pointerup', clear)
+    el.addEventListener('pointerleave', clear)
+    el.addEventListener('pointercancel', clear)
+  }
 }
 
 function wireRealmFightExtras() {
