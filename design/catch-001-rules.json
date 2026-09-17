@@ -1,0 +1,121 @@
+{
+  "changeId": "BRIEF-CATCH-001",
+  "preserve": [
+    "BRIEF-RPG-001",
+    "VOICE dual-stage",
+    "CHANGE-VOICE-003"
+  ],
+  "catchThresholdHp": {
+    "common": 40,
+    "rare": 20
+  },
+  "maxHp": 100,
+  "monsterDmg": 14,
+  "encounterWeights": {
+    "common": 0.7,
+    "rare": 0.3
+  },
+  "winGoldRareMult": 1.5,
+  "seal": {
+    "zhuyinPreferDual": true,
+    "englishSingleWord": true,
+    "timeMs": [
+      4500,
+      6000
+    ],
+    "prompts": [
+      {
+        "id": "s_yin",
+        "mode": "zhuyin",
+        "displayPrimary": "ㄧㄣ",
+        "displaySecondary": "印",
+        "timeMs": 5500
+      },
+      {
+        "id": "s_feng",
+        "mode": "zhuyin",
+        "displayPrimary": "ㄈㄥ",
+        "displaySecondary": "封",
+        "timeMs": 5500
+      },
+      {
+        "id": "s_ling",
+        "mode": "zhuyin",
+        "displayPrimary": "ㄌㄧㄥ",
+        "displaySecondary": "靈",
+        "timeMs": 5500
+      },
+      {
+        "id": "s_zhu",
+        "mode": "zhuyin",
+        "displayPrimary": "ㄓㄨ",
+        "displaySecondary": "住",
+        "timeMs": 5500
+      },
+      {
+        "id": "s_seal",
+        "mode": "english",
+        "displayPrimary": "SEAL",
+        "displaySecondary": "SEAL",
+        "timeMs": 5000
+      },
+      {
+        "id": "s_bind",
+        "mode": "english",
+        "displayPrimary": "BIND",
+        "displaySecondary": "BIND",
+        "timeMs": 5000
+      },
+      {
+        "id": "s_catch",
+        "mode": "english",
+        "displayPrimary": "CATCH",
+        "displaySecondary": "CATCH",
+        "timeMs": 5000
+      },
+      {
+        "id": "s_mark",
+        "mode": "english",
+        "displayPrimary": "MARK",
+        "displaySecondary": "MARK",
+        "timeMs": 5000
+      }
+    ]
+  },
+  "spirits": [
+    {
+      "id": "spirit_ember",
+      "name": "焰靈",
+      "rarity": "common"
+    },
+    {
+      "id": "spirit_dew",
+      "name": "露靈",
+      "rarity": "common"
+    },
+    {
+      "id": "spirit_pebble",
+      "name": "石靈",
+      "rarity": "common"
+    },
+    {
+      "id": "spirit_moon",
+      "name": "月靈",
+      "rarity": "rare"
+    },
+    {
+      "id": "spirit_void",
+      "name": "虛靈",
+      "rarity": "rare"
+    }
+  ],
+  "codex": {
+    "collectOnly": true,
+    "noBattleUse": true
+  },
+  "onSealFail": [
+    "fight_again",
+    "flee"
+  ],
+  "knockoutDoesNotAutoCatch": true
+}

@@ -1,5 +1,6 @@
 import './style.css'
 import './castle-skin.css'
+import './catch.css'
 
 /** ART-STYLE-MOONCASTLE backdrop (public/art) */
 document.documentElement.style.setProperty(
@@ -41,6 +42,23 @@ import {
   winGold,
 } from './rpg'
 
+import {
+  type SpiritDef,
+  buildRealmQueue,
+  catchThreshold,
+  isCatchReady,
+  pickSealPrompt,
+  sealStartStage,
+  realmWinGold,
+  addToCodex,
+  loadCodex,
+  spiritPlaceholderHtml,
+  rarityLabel,
+  getSpirit,
+  REALM_ENCOUNTERS_MIN,
+  REALM_ENCOUNTERS_MAX,
+} from './catch'
+
 /** Brief green-lamp hold after a stage is accepted (ms) */
 const STAGE_OK_HOLD_MS = 450
 /** Long-press duration on title for QA simulate-win (ms) */
@@ -70,6 +88,18 @@ function resetAdventureSession() {
   state.heard = ''
   state.status = ''
   stage1Passed = false
+  state.playMode = 'adventure'
+  state.pendingPath = 'adventure'
+  state.realmQueue = []
+  state.realmIndex = 0
+  state.spirit = null
+  state.catchReady = false
+  state.realmKnockout = false
+  state.sealOpen = false
+  state.sealPrompt = null
+  state.sealHpSnapshot = 100
+  state.lastCatchMsg = ''
+  state.codexSelectedId = null
 }
 
 function goTitleFresh() {
@@ -136,7 +166,7 @@ function wireTitleLongPressQa() {
 }
 
 
-type Screen = 'title' | 'select' | 'shop' | 'fight' | 'result'
+type Screen = 'title' | 'select' | 'shop' | 'fight' | 'result' | 'realm' | 'codex' | 'realm-result'
 type StageNum = 1 | 2
 
 interface State {
@@ -168,6 +198,23 @@ interface State {
   /** Rogue dodge next fail */
   dodgeCharges: number
   firstStrikeDone: boolean
+  /** adventure = BRIEF-RPG; realm = BRIEF-CATCH */
+  playMode: 'adventure' | 'realm'
+  /** Where mode→job should lead */
+  pendingPath: 'adventure' | 'realm'
+  realmQueue: SpiritDef[]
+  realmIndex: number
+  spirit: SpiritDef | null
+  /** HP at/below catch threshold; pause voice prompts */
+  catchReady: boolean
+  /** Knocked out (HP 0) in realm — choose seal or take gold */
+  realmKnockout: boolean
+  sealOpen: boolean
+  sealPrompt: VoicePrompt | null
+  /** Snapshot monster HP when opening seal (restore on fail) */
+  sealHpSnapshot: number
+  lastCatchMsg: string
+  codexSelectedId: string | null
 }
 
 const state: State = {
@@ -196,6 +243,18 @@ const state: State = {
   blockCharges: 0,
   dodgeCharges: 0,
   firstStrikeDone: false,
+  playMode: 'adventure',
+  pendingPath: 'adventure',
+  realmQueue: [],
+  realmIndex: 0,
+  spirit: null,
+  catchReady: false,
+  realmKnockout: false,
+  sealOpen: false,
+  sealPrompt: null,
+  sealHpSnapshot: 100,
+  lastCatchMsg: '',
+  codexSelectedId: null,
 }
 
 const app = document.querySelector<HTMLDivElement>('#app')!
@@ -207,7 +266,17 @@ let stage1Passed = false
 
 const voice = new VoiceRecognizer({
   onResult: (transcript, isFinal) => {
+    if (state.sealOpen) {
+      if (state.phase !== 'input' || !state.prompt) return
+      state.heard = transcript
+      updateSealHud()
+      pulseHeardLine(isFinal)
+      if (!isFinal && transcript.trim().length < 1) return
+      void trySealMatch(transcript, isFinal)
+      return
+    }
     if (state.screen !== 'fight' || state.phase !== 'input' || !state.prompt) return
+    if (state.catchReady || state.realmKnockout) return
     state.heard = transcript
     updateVoiceHud()
     pulseHeardLine(isFinal)
@@ -295,6 +364,17 @@ function chibiHeroHtml(): string {
 }
 
 function chibiMonsterHtml(): string {
+  if (state.playMode === 'realm' && state.spirit) {
+    const s = state.spirit
+    return `
+    <div class="fighter monster portrait-wrap spirit-fighter" id="monster" style="--spirit-tint:${s.tint}">
+      <div class="spirit-slot-art fight-spirit-art" aria-label="${escapeHtml(s.name)} 占位">
+        <div class="spirit-watermark"></div>
+        <span class="spirit-ph-label">占位</span>
+        <span class="spirit-ph-wait">${escapeHtml(s.name)}</span>
+      </div>
+    </div>`
+  }
   return `
     <div class="fighter monster portrait-wrap" id="monster">
       ${portraitImg(MONSTER_ART, '魔物', 'portrait-fight')}
@@ -313,9 +393,14 @@ function render() {
           <button class="btn btn-zhuyin" data-mode="zhuyin" type="button">注音語音版</button>
           <button class="btn btn-english" data-mode="english" type="button">英文語音版</button>
         </div>
+        <div class="title-extra-row mode-row">
+          <button class="btn btn-english" id="btn-realm" type="button">靈域探索</button>
+          <button class="btn btn-ghost" id="btn-codex" type="button">圖鑑</button>
+        </div>
         <div class="howto">
           <strong>冒險流程</strong><br/>
           · 選模式 → 選職業 → 商店（可跳過）→ 戰鬥<br/>
+          · <strong>靈域探索</strong>：選模式／職業後遇印靈；壓血至門檻→施印→圖鑑（只收藏）<br/>
           · <strong>注音</strong>：先唸「音」，再唸漢字 · <strong>英文</strong>：先拼字母，再說單字<br/>
           · 兩階段綠燈 → 攻擊；失敗／逾時 → 魔物反擊（可用技能／道具）<br/>
           · 語音不可用時可在戰鬥畫面用<strong>打字 fallback</strong>（輸入框會提示當前答案）<br/>
@@ -331,9 +416,38 @@ function render() {
     app.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((btn) => {
       btn.addEventListener('click', () => {
         state.mode = btn.dataset.mode as GameMode
+        state.pendingPath = 'adventure'
+        state.playMode = 'adventure'
         state.screen = 'select'
         render()
       })
+    })
+    app.querySelector('#btn-realm')!.addEventListener('click', () => {
+      state.pendingPath = 'realm'
+      state.playMode = 'realm'
+      if (state.mode && state.jobId) {
+        beginRealmEntry()
+        return
+      }
+      const hint = document.querySelector('.subtitle')
+      if (hint) hint.textContent = '靈域探索：請先選注音／英文模式，再選職業'
+      // Mode buttons already wired; re-wire them for realm pendingPath
+      app.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((btn) => {
+        const clone = btn.cloneNode(true) as HTMLButtonElement
+        btn.replaceWith(clone)
+        clone.addEventListener('click', () => {
+          state.mode = clone.dataset.mode as GameMode
+          state.pendingPath = 'realm'
+          state.playMode = 'realm'
+          state.screen = 'select'
+          render()
+        })
+      })
+    })
+    app.querySelector('#btn-codex')!.addEventListener('click', () => {
+      state.screen = 'codex'
+      state.codexSelectedId = null
+      render()
     })
     wireTitleLongPressQa()
     return
@@ -367,6 +481,10 @@ function render() {
     app.querySelectorAll<HTMLButtonElement>('[data-job]').forEach((btn) => {
       btn.addEventListener('click', () => {
         state.jobId = btn.dataset.job as JobId
+        if (state.pendingPath === 'realm') {
+          beginRealmEntry()
+          return
+        }
         state.screen = 'shop'
         render()
       })
@@ -404,6 +522,7 @@ function render() {
         </div>
         <div class="mode-row">
           <button class="btn btn-zhuyin" data-to-fight type="button">出征！</button>
+          <button class="btn btn-english" id="btn-realm" type="button">靈域探索</button>
           <button class="btn btn-ghost" data-skip-shop type="button">跳過商店</button>
           <button class="btn btn-ghost" data-back-select type="button">重選職業</button>
         </div>
@@ -424,6 +543,7 @@ function render() {
     }
     app.querySelector('[data-to-fight]')!.addEventListener('click', goFight)
     app.querySelector('[data-skip-shop]')!.addEventListener('click', goFight)
+    app.querySelector('#btn-realm')!.addEventListener('click', () => beginRealmEntry())
     app.querySelector('[data-back-select]')!.addEventListener('click', () => {
       state.screen = 'select'
       render()
@@ -457,6 +577,8 @@ function render() {
               : `<button class="btn btn-zhuyin" data-again type="button">再戰一場</button>
                  <button class="btn btn-english" data-to-shop type="button">回商店補貨</button>`
           }
+          <button class="btn btn-english" id="btn-realm" type="button">靈域探索</button>
+          <button class="btn btn-ghost" id="btn-codex" type="button">圖鑑</button>
           <button class="btn btn-ghost" data-reselect type="button">重選職業</button>
           <button class="btn btn-ghost" data-title type="button">回標題</button>
         </div>
@@ -473,9 +595,36 @@ function render() {
       state.screen = 'select'
       render()
     })
+    app.querySelector('#btn-realm')!.addEventListener('click', () => {
+      if (!state.mode || !state.jobId) {
+        state.pendingPath = 'realm'
+        state.screen = 'title'
+        render()
+        return
+      }
+      beginRealmEntry()
+    })
+    app.querySelector('#btn-codex')!.addEventListener('click', () => {
+      state.screen = 'codex'
+      state.codexSelectedId = null
+      render()
+    })
     app.querySelector('[data-title]')!.addEventListener('click', () => {
       goTitleFresh()
     })
+    return
+  }
+
+  if (state.screen === 'realm') {
+    renderRealmScreen()
+    return
+  }
+  if (state.screen === 'codex') {
+    renderCodexScreen()
+    return
+  }
+  if (state.screen === 'realm-result') {
+    renderRealmResultScreen()
     return
   }
 
@@ -486,16 +635,26 @@ function render() {
   const stage2Cls = state.stage === 2 ? 'current' : stage1Passed ? '' : 'locked'
   const j = job()!
 
+  const monName =
+    state.playMode === 'realm' && state.spirit
+      ? `${state.spirit.name}（${rarityLabel(state.spirit.rarity)}）`
+      : '魔物'
+  const sealSrc = `${import.meta.env.BASE_URL}art/catch/seal.svg`
+
   app.innerHTML = `
-    <div class="screen fight-screen active">
+    <div class="screen fight-screen active ${state.playMode === 'realm' ? 'realm-fight' : ''}">
       <div class="hud">
         <div class="hp-block">
           <div class="hp-label">${escapeHtml(j.name)} ${Math.ceil(state.heroHp)}</div>
           <div class="hp-bar"><div class="hp-fill hero" style="width:${(state.heroHp / MAX_HP) * 100}%"></div></div>
         </div>
-        <div class="round-chip">第 ${state.round} 回合 · 🪙${state.gold}</div>
+        <div class="round-chip">${state.playMode === 'realm' ? `靈域 ${state.realmIndex + 1}/${Math.max(1, state.realmQueue.length)} · ` : ''}第 ${state.round} 回合 · 🪙${state.gold}</div>
         <div class="hp-block monster">
-          <div class="hp-label">魔物 ${Math.ceil(state.monsterHp)}</div>
+          <div class="hp-label">${escapeHtml(monName)} ${Math.ceil(state.monsterHp)} ${
+          state.playMode === 'realm' && state.spirit
+            ? `<span class="threshold-chip ${state.catchReady || state.realmKnockout ? 'ready' : ''}">門檻≤${catchThreshold(state.spirit.rarity)}</span>`
+            : ''
+        }</div>
           <div class="hp-bar"><div class="hp-fill monster" style="width:${(state.monsterHp / MAX_HP) * 100}%"></div></div>
         </div>
       </div>
@@ -526,7 +685,31 @@ function render() {
         }).join('')}
       </div>
 
-      <div class="prompt-panel voice-panel">
+      ${
+        state.playMode === 'realm' && (state.catchReady || state.realmKnockout)
+          ? `<div id="catch-ready" class="${state.spirit?.rarity === 'rare' ? 'rare-ready' : ''}">
+              <span>可施印 · ${state.spirit ? rarityLabel(state.spirit.rarity) : ''}${state.realmKnockout ? ' · 已擊倒' : ''}</span>
+              <button type="button" id="btn-seal">
+                <img id="catch-seal" src="${sealSrc}" alt="印符" width="28" height="28" />
+                ${state.realmKnockout ? '施印嘗試' : '施印'}
+              </button>
+              ${
+                state.status.includes('再打') || state.status.includes('施印失敗') || state.status.includes('施印逾時') || state.status.includes('取消施印')
+                  ? `<button type="button" class="btn btn-zhuyin" id="btn-seal-retry">再打</button>`
+                  : ''
+              }
+              ${
+                state.realmKnockout
+                  ? `<button type="button" class="btn btn-ghost" id="btn-knockout-gold">收下金幣離開</button>`
+                  : `<button type="button" class="btn btn-ghost" id="btn-flee-catch">逃</button>`
+              }
+            </div>`
+          : state.playMode === 'realm'
+            ? `<div class="mode-row" style="margin:4px 0"><button type="button" class="btn btn-ghost" id="btn-flee-catch">逃離靈域</button></div>`
+            : ''
+      }
+
+      <div class="prompt-panel voice-panel ${state.catchReady || state.realmKnockout ? 'voice-masked' : ''}">
         <div class="timer-bar"><div class="timer-fill" id="timer-fill" style="transform:scaleX(${timerPct / 100})"></div></div>
         ${micBadgeHtml()}
         <div class="stage-pills">
@@ -558,6 +741,8 @@ function render() {
 
   mountLottie()
   wireFightControls()
+  wireRealmFightExtras()
+  if (state.sealOpen) mountSealModal()
 }
 
 function wireFightControls() {
@@ -632,6 +817,10 @@ function refreshActionBar() {
 }
 
 function updateVoiceHud() {
+  if (state.sealOpen) {
+    updateSealHud()
+    return
+  }
   if (state.screen !== 'fight') return
   const badge = document.querySelector('#mic-badge')
   if (badge) {
@@ -676,6 +865,8 @@ function pulseHeardLine(isFinal: boolean) {
 }
 
 async function tryMatch(transcript: string, isFinal = true) {
+  if (state.sealOpen) return
+  if (state.catchReady || state.realmKnockout) return
   if (state.phase !== 'input' || !state.prompt || !state.mode) return
   const expected = state.stage === 1 ? state.prompt.stage1 : state.prompt.stage2
   const ok = matchStage(state.mode, state.stage, transcript, expected)
@@ -734,9 +925,11 @@ async function useSkill() {
     refreshActionBar()
     await wait(550)
     if (state.monsterHp <= 0) {
-      endFight()
+      if (state.playMode === 'realm') onRealmMonsterDown()
+      else endFight()
       return
     }
+    if (state.playMode === 'realm' && maybeEnterCatchReady()) return
     state.phase = 'input'
     updateVoiceHud()
     return
@@ -786,9 +979,11 @@ async function useItem(itemId: ItemId) {
     refreshActionBar()
     await wait(550)
     if (state.monsterHp <= 0) {
-      endFight()
+      if (state.playMode === 'realm') onRealmMonsterDown()
+      else endFight()
       return
     }
+    if (state.playMode === 'realm' && maybeEnterCatchReady()) return
     state.phase = 'input'
     updateVoiceHud()
     return
@@ -922,6 +1117,7 @@ async function startFight() {
     }
   }
 
+  state.playMode = 'adventure'
   nextRound()
   startLoop()
   if (ok) {
@@ -930,7 +1126,13 @@ async function startFight() {
 }
 
 function nextRound() {
+  if (state.sealOpen || state.catchReady) return
   if (state.heroHp <= 0 || state.monsterHp <= 0) {
+    if (state.playMode === 'realm') {
+      if (state.monsterHp <= 0) onRealmMonsterDown()
+      else endFight()
+      return
+    }
     endFight()
     return
   }
@@ -957,6 +1159,7 @@ function nextRound() {
 async function resolveSuccess() {
   if (!state.prompt) return
   if (state.phase !== 'input' && state.phase !== 'resolving') return
+  if (state.sealOpen) return
   state.phase = 'resolving'
   const mult = job()?.damageMult ?? 1
   const dmg = Math.round(state.prompt.damage * mult)
@@ -966,6 +1169,15 @@ async function resolveSuccess() {
   playHeroAttackFx(dmg)
   updateHpBars()
   await wait(550)
+  if (state.playMode === 'realm') {
+    if (state.monsterHp <= 0) {
+      onRealmMonsterDown()
+      return
+    }
+    if (maybeEnterCatchReady()) return
+    nextRound()
+    return
+  }
   if (state.monsterHp <= 0) {
     endFight()
     return
@@ -1016,7 +1228,13 @@ function updateHpBars() {
   if (heroFill) heroFill.style.width = `${(state.heroHp / MAX_HP) * 100}%`
   if (monFill) monFill.style.width = `${(state.monsterHp / MAX_HP) * 100}%`
   if (heroLabel) heroLabel.textContent = `${j?.name ?? '勇者'} ${Math.ceil(state.heroHp)}`
-  if (monLabel) monLabel.textContent = `魔物 ${Math.ceil(state.monsterHp)}`
+  if (monLabel) {
+    const monName =
+      state.playMode === 'realm' && state.spirit
+        ? `${state.spirit.name}`
+        : '魔物'
+    monLabel.textContent = `${monName} ${Math.ceil(state.monsterHp)}`
+  }
   const status = document.querySelector('#status')
   if (status) status.textContent = state.status
 }
@@ -1024,7 +1242,20 @@ function updateHpBars() {
 function endFight() {
   stopLoop()
   voice.stop()
+  state.sealOpen = false
+  document.querySelector('#seal-modal')?.remove()
   state.phase = 'idle'
+  if (state.playMode === 'realm' && state.monsterHp <= 0) {
+    onRealmMonsterDown()
+    return
+  }
+  if (state.playMode === 'realm' && state.heroHp <= 0) {
+    state.lastCatchMsg = '勇者力竭 — 未收入印靈。'
+    state.screen = 'realm-result'
+    window.onkeydown = null
+    render()
+    return
+  }
   state.result = state.monsterHp <= 0 ? 'win' : 'lose'
   if (state.result === 'win') {
     state.lastWinGold = winGold(state.round)
@@ -1045,7 +1276,21 @@ function startLoop() {
   const tick = (ts: number) => {
     const dt = ts - lastTs
     lastTs = ts
-    if (state.screen === 'fight' && state.phase === 'input') {
+    if (state.sealOpen && state.phase === 'input') {
+      state.timeLeft -= dt
+      const fill = document.querySelector<HTMLElement>('#seal-timer-fill')
+      if (fill && state.timeMax > 0) {
+        fill.style.transform = `scaleX(${clamp(state.timeLeft / state.timeMax, 0, 1)})`
+      }
+      if (state.timeLeft <= 0) {
+        onSealFail('施印逾時')
+      }
+    } else if (
+      state.screen === 'fight' &&
+      state.phase === 'input' &&
+      !state.catchReady &&
+      !state.realmKnockout
+    ) {
       state.timeLeft -= dt
       const fill = document.querySelector<HTMLElement>('#timer-fill')
       if (fill && state.timeMax > 0) {
@@ -1064,6 +1309,497 @@ function stopLoop() {
   if (rafId) cancelAnimationFrame(rafId)
   rafId = 0
 }
+
+
+/* ========== BRIEF-CATCH-001 / HUD-CATCH-001 ========== */
+
+function beginRealmEntry() {
+  voice.stop()
+  stopLoop()
+  window.onkeydown = null
+  state.playMode = 'realm'
+  state.pendingPath = 'realm'
+  state.realmQueue = buildRealmQueue()
+  state.realmIndex = 0
+  state.spirit = null
+  state.catchReady = false
+  state.realmKnockout = false
+  state.sealOpen = false
+  state.sealPrompt = null
+  state.lastCatchMsg = ''
+  state.screen = 'realm'
+  render()
+}
+
+function renderRealmScreen() {
+  const q = state.realmQueue
+  app.innerHTML = `
+    <div class="screen realm-screen active">
+      <div class="panel-head">
+        <h2>靈域探索</h2>
+        <p class="panel-sub">
+          本趟將遭遇 <strong>${q.length}</strong> 隻印靈（${REALM_ENCOUNTERS_MIN}–${REALM_ENCOUNTERS_MAX}）
+          · 模式：${state.mode === 'zhuyin' ? '注音' : '英文'}
+          · ${state.jobId ? escapeHtml(getJob(state.jobId).name) : '未選職業'}
+        </p>
+      </div>
+      <div class="realm-queue">
+        ${q.map((s) => spiritPlaceholderHtml(s)).join('')}
+      </div>
+      <p class="panel-sub" style="text-align:center">語音壓血至門檻後按「施印」；成功收入圖鑑（只收藏，不上陣）。立繪為占位，等待製作人板。</p>
+      <div class="mode-row">
+        <button class="btn btn-zhuyin" id="btn-realm-start" type="button">進入靈域</button>
+        <button class="btn btn-ghost" id="btn-codex" type="button">圖鑑</button>
+        <button class="btn btn-ghost" data-title type="button">回標題</button>
+      </div>
+    </div>
+  `
+  app.querySelector('#btn-realm-start')!.addEventListener('click', () => {
+    void startRealmEncounter()
+  })
+  app.querySelector('#btn-codex')!.addEventListener('click', () => {
+    state.screen = 'codex'
+    state.codexSelectedId = null
+    render()
+  })
+  app.querySelector('[data-title]')!.addEventListener('click', () => goTitleFresh())
+}
+
+function renderCodexScreen() {
+  const list = loadCodex()
+  const selected = state.codexSelectedId ? getSpirit(state.codexSelectedId) : null
+  const selectedEntry = list.find((e) => e.id === state.codexSelectedId)
+  app.innerHTML = `
+    <div class="screen dex-screen active" id="screen-codex">
+      <div class="panel-head">
+        <h2>印靈圖鑑</h2>
+        <p class="panel-sub">只收藏 · 不可出戰 · 已印 ${list.length} 種</p>
+      </div>
+      ${
+        list.length === 0
+          ? `<p class="codex-empty">還沒印到靈獸。去靈域探索，施印後會出現在這裡。</p>`
+          : `<div class="codex-grid">
+              ${list
+                .map((e) => {
+                  const s = getSpirit(e.id)
+                  if (!s) return ''
+                  return `<button type="button" class="spirit-slot codex-card codex-frame" data-codex="${s.id}">
+                    ${spiritPlaceholderHtml(s, 'codex-card').replace(/^<div class="spirit-slot[^"]*"[^>]*>/, '').replace(/<\/div>$/, '')}
+                  </button>`
+                })
+                .join('')}
+            </div>`
+      }
+      ${
+        selected
+          ? `<div id="codex-detail" class="codex-frame">
+              ${spiritPlaceholderHtml(selected, 'codex-card')}
+              <p class="panel-sub">${escapeHtml(selected.blurb)}</p>
+              <p class="dex-caught-at">${selectedEntry ? new Date(selectedEntry.caughtAt).toLocaleString('zh-TW') : ''}</p>
+              <p class="panel-sub">無數值養成 · 無出戰</p>
+            </div>`
+          : ''
+      }
+      <div class="mode-row">
+        <button class="btn btn-english" id="btn-realm" type="button">靈域</button>
+        <button class="btn btn-ghost" data-title type="button">回標題</button>
+      </div>
+    </div>
+  `
+  // Fix broken nested HTML for cards — rebuild simply
+  const grid = app.querySelector('.codex-grid')
+  if (grid && list.length) {
+    grid.innerHTML = list
+      .map((e) => {
+        const s = getSpirit(e.id)
+        if (!s) return ''
+        return `<button type="button" class="codex-card-btn" data-codex="${s.id}">${spiritPlaceholderHtml(s, 'codex-card')}</button>`
+      })
+      .join('')
+  }
+  app.querySelectorAll<HTMLButtonElement>('[data-codex]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.codexSelectedId = btn.dataset.codex ?? null
+      render()
+    })
+  })
+  app.querySelector('#btn-realm')?.addEventListener('click', () => {
+    state.pendingPath = 'realm'
+    state.playMode = 'realm'
+    if (!state.mode || !state.jobId) {
+      state.screen = 'title'
+      render()
+      return
+    }
+    beginRealmEntry()
+  })
+  app.querySelector('[data-title]')!.addEventListener('click', () => goTitleFresh())
+}
+
+function renderRealmResultScreen() {
+  app.innerHTML = `
+    <div class="screen realm-result-screen result-screen active">
+      <h2>靈域結束</h2>
+      <p class="result-msg">${escapeHtml(state.lastCatchMsg || '本趟探索結束。')}</p>
+      <p class="result-msg">圖鑑收藏 ${loadCodex().length} 種 · 🪙 ${state.gold}</p>
+      <div class="mode-row">
+        <button class="btn btn-zhuyin" id="btn-realm" type="button">再探靈域</button>
+        <button class="btn btn-english" id="btn-codex" type="button">圖鑑</button>
+        <button class="btn btn-ghost" data-to-shop type="button">回商店</button>
+        <button class="btn btn-ghost" data-title type="button">回標題</button>
+      </div>
+    </div>
+  `
+  app.querySelector('#btn-realm')!.addEventListener('click', () => beginRealmEntry())
+  app.querySelector('#btn-codex')!.addEventListener('click', () => {
+    state.screen = 'codex'
+    state.codexSelectedId = null
+    render()
+  })
+  app.querySelector('[data-to-shop]')!.addEventListener('click', () => {
+    state.playMode = 'adventure'
+    state.pendingPath = 'adventure'
+    state.screen = 'shop'
+    render()
+  })
+  app.querySelector('[data-title]')!.addEventListener('click', () => goTitleFresh())
+}
+
+async function startRealmEncounter() {
+  if (!state.mode || !state.jobId) return
+  if (state.realmIndex >= state.realmQueue.length) {
+    state.lastCatchMsg = '本趟印靈皆已處理。'
+    state.screen = 'realm-result'
+    render()
+    return
+  }
+  state.spirit = state.realmQueue[state.realmIndex]!
+  state.catchReady = false
+  state.realmKnockout = false
+  state.sealOpen = false
+  state.sealPrompt = null
+  const ok = await voice.ensurePermission()
+  const j = getJob(state.jobId)
+  state.screen = 'fight'
+  state.heroHp = MAX_HP
+  state.monsterHp = MAX_HP
+  state.round = 0
+  state.deck = createPromptDeck(state.mode)
+  state.deckIndex = 0
+  state.result = null
+  state.lastWinGold = 0
+  state.heard = ''
+  state.skillLeft = j.skillMax
+  state.blockCharges = 0
+  state.dodgeCharges = 0
+  state.firstStrikeDone = false
+  state.status = ok
+    ? `印靈「${state.spirit.name}」出現！壓至 HP≤${catchThreshold(state.spirit.rarity)} 可施印`
+    : '請啟用麥克風或打字；壓血後可施印'
+  voice.setLang(speechLang(state.mode))
+  render()
+
+  if (j.firstStrike > 0 && !state.firstStrikeDone) {
+    state.firstStrikeDone = true
+    state.monsterHp = clamp(state.monsterHp - j.firstStrike, 0, MAX_HP)
+    state.status = `盜賊先制！-${j.firstStrike}`
+    playHeroAttackFx(j.firstStrike)
+    updateHpBars()
+    await wait(500)
+    if (state.monsterHp <= 0) {
+      onRealmMonsterDown()
+      return
+    }
+    maybeEnterCatchReady()
+  }
+
+  if (!state.catchReady && !state.realmKnockout) {
+    nextRound()
+    startLoop()
+    if (ok) voice.start()
+  }
+}
+
+function maybeEnterCatchReady() {
+  if (state.playMode !== 'realm' || !state.spirit) return false
+  if (!isCatchReady(state.monsterHp, state.spirit.rarity)) return false
+  state.catchReady = true
+  state.phase = 'idle'
+  voice.stop()
+  state.status =
+    state.monsterHp <= 0
+      ? '擊倒！可施印嘗試或收下金幣離開'
+      : `可施印！HP≤${catchThreshold(state.spirit.rarity)}`
+  if (state.monsterHp <= 0) state.realmKnockout = true
+  render()
+  return true
+}
+
+function onRealmMonsterDown() {
+  stopLoop()
+  voice.stop()
+  state.phase = 'idle'
+  state.realmKnockout = true
+  state.catchReady = true
+  state.status = '擊倒！可施印嘗試或收下金幣離開'
+  render()
+}
+
+function wireRealmFightExtras() {
+  if (state.playMode !== 'realm') return
+  document.querySelector('#btn-seal')?.addEventListener('click', () => openSealModal())
+  document.querySelector('#btn-flee-catch')?.addEventListener('click', () => fleeRealmEncounter(false))
+  document.querySelector('#btn-knockout-gold')?.addEventListener('click', () => {
+    takeKnockoutGoldAndAdvance()
+  })
+  document.querySelector('#btn-seal-retry')?.addEventListener('click', () => {
+    state.catchReady = false
+    state.realmKnockout = state.monsterHp <= 0
+    state.status = '繼續戰鬥！'
+    if (state.realmKnockout) {
+      state.catchReady = true
+      render()
+      return
+    }
+    nextRound()
+    startLoop()
+    void voice.ensurePermission().then((ok) => {
+      if (ok) voice.start()
+    })
+    render()
+  })
+}
+
+function takeKnockoutGoldAndAdvance() {
+  if (!state.spirit) return
+  const award = realmWinGold(winGold(Math.max(1, state.round)), state.spirit.rarity)
+  state.gold += award
+  state.lastWinGold = award
+  state.lastCatchMsg = `擊倒 ${state.spirit.name}，獲得 🪙${award}（未施印）。`
+  advanceRealmAfterEncounter()
+}
+
+function fleeRealmEncounter(_fromSeal: boolean) {
+  voice.stop()
+  stopLoop()
+  state.sealOpen = false
+  state.catchReady = false
+  state.realmKnockout = false
+  state.phase = 'idle'
+  state.lastCatchMsg = state.spirit
+    ? `逃離「${state.spirit.name}」— 未收入、無勝金。`
+    : '已逃離靈域。'
+  // end whole realm run on flee (brief: back to shop/title)
+  state.screen = 'realm-result'
+  window.onkeydown = null
+  render()
+}
+
+function openSealModal() {
+  if (!state.mode || !state.spirit) return
+  if (!isCatchReady(state.monsterHp, state.spirit.rarity) && !state.realmKnockout) return
+  state.sealHpSnapshot = state.monsterHp
+  state.sealPrompt = pickSealPrompt(state.mode)
+  state.prompt = state.sealPrompt
+  state.stage = sealStartStage(state.mode)
+  stage1Passed = state.stage === 2
+  state.phase = 'input'
+  state.timeMax = state.sealPrompt.timeMs
+  state.timeLeft = state.sealPrompt.timeMs
+  state.heard = ''
+  state.sealOpen = true
+  state.status = state.mode === 'english' ? '施印：說出整詞！' : '施印：先音後字！'
+  voice.setLang(speechLang(state.mode))
+  render()
+  startLoop()
+  void voice.ensurePermission().then((ok) => {
+    if (ok && state.sealOpen) voice.start()
+  })
+}
+
+function mountSealModal() {
+  const existing = document.querySelector('#seal-modal')
+  existing?.remove()
+  const p = state.sealPrompt
+  if (!p) return
+  const sealSrc = `${import.meta.env.BASE_URL}art/catch/seal.svg`
+  const timerPct = state.timeMax > 0 ? clamp((state.timeLeft / state.timeMax) * 100, 0, 100) : 0
+  const modal = document.createElement('div')
+  modal.id = 'seal-modal'
+  modal.innerHTML = `
+    <div class="seal-modal-card">
+      <h2 style="text-align:center;color:#ffd76a;margin:0 0 4px">施印</h2>
+      <img id="catch-seal" class="seal-lg" src="${sealSrc}" alt="印符" width="96" height="96" />
+      <div class="prompt-panel voice-panel" style="margin:0;padding:10px">
+        <div class="timer-bar"><div class="timer-fill" id="seal-timer-fill" style="transform:scaleX(${timerPct / 100})"></div></div>
+        ${micBadgeHtml()}
+        <div class="stage-pills">
+          <span class="stage-pill ${state.stage === 1 ? 'current' : stage1Passed ? 'done' : ''}">${state.mode === 'english' ? 'WORD' : 'Stage 1'}</span>
+          ${
+            state.mode === 'zhuyin'
+              ? `<span class="stage-arrow">→</span><span class="stage-pill ${state.stage === 2 ? 'current' : ''}">Stage 2</span>`
+              : ''
+          }
+        </div>
+        <div class="prompt-row voice-prompt">
+          <span class="prompt-primary" id="prompt-primary">${escapeHtml(p.displayPrimary)}</span>
+          ${
+            state.mode === 'zhuyin'
+              ? `<span class="prompt-sep">·</span><span class="prompt-secondary" id="prompt-secondary">${escapeHtml(p.displaySecondary)}</span>`
+              : ''
+          }
+        </div>
+        <div class="prompt-hint" id="stage-hint">${sealInstruction()}</div>
+        <div class="heard-line" id="heard-line">聽到：${escapeHtml(state.heard) || '（尚未辨識）'}</div>
+        <div class="status-toast" id="status">${escapeHtml(state.status)}</div>
+        <form class="type-fallback" id="seal-type-form">
+          <input type="text" id="seal-type-input" class="type-input" placeholder="打字施印…" autocomplete="off" />
+          <button type="submit" class="btn btn-ghost">送出</button>
+        </form>
+        <div class="mode-row" style="margin-top:8px">
+          <button type="button" class="btn btn-ghost" id="btn-seal-cancel">取消</button>
+        </div>
+      </div>
+    </div>
+  `
+  document.body.appendChild(modal)
+  modal.querySelector('#seal-type-form')?.addEventListener('submit', (e) => {
+    e.preventDefault()
+    const input = modal.querySelector<HTMLInputElement>('#seal-type-input')
+    if (!input) return
+    const t = input.value.trim()
+    if (!t) return
+    state.heard = t
+    input.value = ''
+    updateSealHud()
+    void trySealMatch(t)
+  })
+  modal.querySelector('#btn-seal-cancel')?.addEventListener('click', () => {
+    onSealFail('取消施印')
+  })
+}
+
+function sealInstruction(): string {
+  if (!state.sealPrompt || !state.mode) return ''
+  if (state.mode === 'english') {
+    return `施印：說出「${escapeHtml(state.sealPrompt.displaySecondary)}」`
+  }
+  return state.stage === 1
+    ? `施印①：唸音「${escapeHtml(state.sealPrompt.displayPrimary)}」`
+    : `施印②：說「${escapeHtml(state.sealPrompt.displaySecondary)}」`
+}
+
+function updateSealHud() {
+  if (!state.sealOpen) return
+  const heard = document.querySelector('#seal-modal #heard-line')
+  if (heard) heard.textContent = `聽到：${state.heard || '（尚未辨識）'}`
+  const status = document.querySelector('#seal-modal #status')
+  if (status) status.textContent = state.status
+  const hint = document.querySelector('#seal-modal #stage-hint')
+  if (hint) hint.innerHTML = sealInstruction()
+  const badge = document.querySelector('#seal-modal #mic-badge')
+  if (badge) {
+    const wrap = document.createElement('div')
+    wrap.innerHTML = micBadgeHtml()
+    badge.replaceWith(wrap.firstElementChild!)
+  }
+  const fill = document.querySelector<HTMLElement>('#seal-timer-fill')
+  if (fill && state.timeMax > 0) {
+    fill.style.transform = `scaleX(${clamp(state.timeLeft / state.timeMax, 0, 1)})`
+  }
+}
+
+async function trySealMatch(transcript: string, isFinal = true) {
+  if (!state.sealOpen || state.phase !== 'input' || !state.prompt || !state.mode) return
+  const expected = state.stage === 1 ? state.prompt.stage1 : state.prompt.stage2
+  const ok = matchStage(state.mode, state.stage, transcript, expected)
+  if (!ok) {
+    if (isFinal && transcript.trim()) {
+      state.status = nearMissHint(
+        state.mode,
+        state.stage,
+        transcript,
+        expected,
+        state.stage === 1 ? state.prompt.displayPrimary : state.prompt.displaySecondary,
+      )
+      updateSealHud()
+    }
+    return
+  }
+  state.phase = 'resolving'
+  if (state.mode === 'zhuyin' && state.stage === 1) {
+    stage1Passed = true
+    state.heard = ''
+    state.status = '① 綠燈！繼續施印②'
+    lightPromptTarget('primary')
+    updateSealHud()
+    await wait(STAGE_OK_HOLD_MS)
+    if (!state.sealOpen) return
+    state.stage = 2
+    state.phase = 'input'
+    updateSealHud()
+    return
+  }
+  state.status = '施印成功！'
+  const sealEl = document.querySelector('#seal-modal #catch-seal')
+  sealEl?.classList.add('hit')
+  updateSealHud()
+  await wait(500)
+  onSealSuccess()
+}
+
+function onSealSuccess() {
+  stopLoop()
+  voice.stop()
+  state.sealOpen = false
+  document.querySelector('#seal-modal')?.remove()
+  if (!state.spirit) return
+  const { isNew } = addToCodex(state.spirit)
+  state.lastCatchMsg = isNew
+    ? `「${state.spirit.name}」已收入圖鑑！`
+    : `「${state.spirit.name}」施印成功（圖鑑已有・重複）。`
+  state.catchReady = false
+  state.realmKnockout = false
+  state.phase = 'idle'
+  advanceRealmAfterEncounter()
+}
+
+function onSealFail(reason: string) {
+  stopLoop()
+  voice.stop()
+  state.sealOpen = false
+  document.querySelector('#seal-modal')?.remove()
+  state.monsterHp = state.sealHpSnapshot
+  state.prompt = null
+  state.phase = 'idle'
+  state.status = `${reason} — 選再打或逃`
+  state.catchReady = true
+  if (state.monsterHp <= 0) state.realmKnockout = true
+  render()
+}
+
+function advanceRealmAfterEncounter() {
+  voice.stop()
+  stopLoop()
+  window.onkeydown = null
+  state.sealOpen = false
+  document.querySelector('#seal-modal')?.remove()
+  state.realmIndex += 1
+  state.spirit = null
+  state.catchReady = false
+  state.realmKnockout = false
+  if (state.realmIndex >= state.realmQueue.length) {
+    if (!state.lastCatchMsg) state.lastCatchMsg = '本趟靈域探索結束。'
+    state.screen = 'realm-result'
+    render()
+    return
+  }
+  // brief pause then next
+  state.screen = 'realm'
+  // skip queue overview — auto next encounter
+  void startRealmEncounter()
+}
+
 
 // Boot
 render()
