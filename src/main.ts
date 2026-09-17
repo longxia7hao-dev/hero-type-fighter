@@ -640,9 +640,22 @@ function render() {
       ? `${state.spirit.name}（${rarityLabel(state.spirit.rarity)}）`
       : '魔物'
   const sealSrc = `${import.meta.env.BASE_URL}art/catch/seal.png`
+  // Sync flag from live HP before paint (covers missed maybeEnter calls)
+  if (inRealmFight() && state.spirit && !state.sealOpen) {
+    if (state.monsterHp <= 0) {
+      state.realmKnockout = true
+      state.catchReady = true
+      state.playMode = 'realm'
+    } else if (isCatchReady(state.monsterHp, state.spirit.rarity)) {
+      state.catchReady = true
+      state.playMode = 'realm'
+      state.phase = 'idle'
+    }
+  }
+  const showCatchUi = shouldShowCatchUi()
 
   app.innerHTML = `
-    <div class="screen fight-screen active ${state.playMode === 'realm' ? 'realm-fight' : ''}${state.catchReady || state.realmKnockout ? ' is-catch-ready' : ''}">
+    <div class="screen fight-screen active ${state.playMode === 'realm' ? 'realm-fight' : ''}${showCatchUi ? ' is-catch-ready' : ''}">
       <div class="hud">
         <div class="hp-block">
           <div class="hp-label">${escapeHtml(j.name)} ${Math.ceil(state.heroHp)}</div>
@@ -652,12 +665,42 @@ function render() {
         <div class="hp-block monster">
           <div class="hp-label">${escapeHtml(monName)} ${Math.ceil(state.monsterHp)} ${
           state.playMode === 'realm' && state.spirit
-            ? `<span class="threshold-chip ${state.catchReady || state.realmKnockout ? 'ready' : ''}">門檻≤${catchThreshold(state.spirit.rarity)}</span>`
+            ? `<span class="threshold-chip ${showCatchUi ? 'ready' : ''}">門檻≤${catchThreshold(state.spirit.rarity)}</span>`
             : ''
         }</div>
           <div class="hp-bar"><div class="hp-fill monster" style="width:${(state.monsterHp / MAX_HP) * 100}%"></div></div>
         </div>
       </div>
+
+      ${
+        inRealmFight() && showCatchUi
+          ? `<div id="catch-ready" class="catch-ready-bar ${state.spirit?.rarity === 'rare' ? 'rare-ready' : ''}" data-catch-ready="1">
+              <div class="catch-ready-copy">
+                <strong>可施印</strong>
+                <span>· ${state.spirit ? rarityLabel(state.spirit.rarity) : ''} · 門檻≤${state.spirit ? catchThreshold(state.spirit.rarity) : '?'} · HP ${Math.ceil(state.monsterHp)}${state.realmKnockout ? ' · 已擊倒' : ''}</span>
+              </div>
+              <div class="catch-ready-actions">
+                <button type="button" class="btn btn-seal" id="btn-seal">
+                  <img id="catch-seal" src="${sealSrc}" alt="印符" width="28" height="28" onerror="this.onerror=null;this.src='${import.meta.env.BASE_URL}art/catch/seal.svg'" />
+                  ${state.realmKnockout ? '施印嘗試' : '施印'}
+                </button>
+                ${
+                  state.status.includes('再打') || state.status.includes('施印失敗') || state.status.includes('施印逾時') || state.status.includes('取消施印')
+                    ? `<button type="button" class="btn btn-zhuyin" id="btn-seal-retry">再打</button>`
+                    : ''
+                }
+                ${
+                  state.realmKnockout
+                    ? `<button type="button" class="btn btn-ghost" id="btn-knockout-gold">收下金幣離開</button>`
+                    : `<button type="button" class="btn btn-ghost" id="btn-flee-catch">逃</button>`
+                }
+              </div>
+              <p class="catch-ready-hint">出招已暫停 — 按「施印」開短題（語音或打字）</p>
+            </div>`
+          : inRealmFight()
+            ? `<div class="mode-row catch-flee-row" style="margin:4px 0"><button type="button" class="btn btn-ghost" id="btn-flee-catch">逃離靈域</button></div>`
+            : ''
+      }
 
       <div class="buff-row" id="buff-row">
         ${state.blockCharges > 0 ? `<span class="buff-chip">護盾×${state.blockCharges}</span>` : ''}
@@ -685,38 +728,9 @@ function render() {
         }).join('')}
       </div>
 
-      ${
-        state.playMode === 'realm' && (state.catchReady || state.realmKnockout)
-          ? `<div id="catch-ready" class="catch-ready-bar ${state.spirit?.rarity === 'rare' ? 'rare-ready' : ''}">
-              <div class="catch-ready-copy">
-                <strong>可施印</strong>
-                <span>· ${state.spirit ? rarityLabel(state.spirit.rarity) : ''}${state.realmKnockout ? ' · 已擊倒' : ''} · HP ${Math.ceil(state.monsterHp)}≤${state.spirit ? catchThreshold(state.spirit.rarity) : '?'}</span>
-              </div>
-              <div class="catch-ready-actions">
-                <button type="button" class="btn btn-seal" id="btn-seal">
-                  <img id="catch-seal" src="${sealSrc}" alt="印符" width="28" height="28" onerror="this.onerror=null;this.src='${import.meta.env.BASE_URL}art/catch/seal.svg'" />
-                  ${state.realmKnockout ? '施印嘗試' : '施印'}
-                </button>
-                ${
-                  state.status.includes('再打') || state.status.includes('施印失敗') || state.status.includes('施印逾時') || state.status.includes('取消施印')
-                    ? `<button type="button" class="btn btn-zhuyin" id="btn-seal-retry">再打</button>`
-                    : ''
-                }
-                ${
-                  state.realmKnockout
-                    ? `<button type="button" class="btn btn-ghost" id="btn-knockout-gold">收下金幣離開</button>`
-                    : `<button type="button" class="btn btn-ghost" id="btn-flee-catch">逃</button>`
-                }
-              </div>
-              <p class="catch-ready-hint">戰鬥出招已暫停 — 按「施印」開啟短題（語音或打字）</p>
-            </div>`
-          : state.playMode === 'realm'
-            ? `<div class="mode-row" style="margin:4px 0"><button type="button" class="btn btn-ghost" id="btn-flee-catch">逃離靈域</button></div>`
-            : ''
-      }
 
       ${
-        state.catchReady || state.realmKnockout
+        showCatchUi
           ? `<div class="prompt-panel voice-panel voice-masked catch-paused" aria-hidden="true">
               <div class="status-toast" id="status">${escapeHtml(state.status)}</div>
               <div class="voice-actions">
@@ -940,11 +954,11 @@ async function useSkill() {
     refreshActionBar()
     await wait(280)
     if (state.monsterHp <= 0) {
-      if (state.playMode === 'realm') onRealmMonsterDown()
+      if (inRealmFight()) onRealmMonsterDown()
       else endFight()
       return
     }
-    if (state.playMode === 'realm' && maybeEnterCatchReady()) return
+    if (inRealmFight() && syncCatchReadyFromHp()) return
     state.phase = 'input'
     updateVoiceHud()
     return
@@ -994,11 +1008,11 @@ async function useItem(itemId: ItemId) {
     refreshActionBar()
     await wait(280)
     if (state.monsterHp <= 0) {
-      if (state.playMode === 'realm') onRealmMonsterDown()
+      if (inRealmFight()) onRealmMonsterDown()
       else endFight()
       return
     }
-    if (state.playMode === 'realm' && maybeEnterCatchReady()) return
+    if (inRealmFight() && syncCatchReadyFromHp()) return
     state.phase = 'input'
     updateVoiceHud()
     return
@@ -1183,25 +1197,13 @@ async function resolveSuccess() {
   state.monsterHp = clamp(state.monsterHp - dmg, 0, MAX_HP)
   playHeroAttackFx(dmg)
   updateHpBars()
-  // BRIEF-CATCH-001: pause into catch-ready as soon as threshold crossed (don't wait full FX)
-  if (state.playMode === 'realm' && state.spirit) {
-    if (state.monsterHp <= 0) {
-      await wait(280)
-      onRealmMonsterDown()
-      return
-    }
-    if (isCatchReady(state.monsterHp, state.spirit.rarity)) {
-      await wait(280)
-      if (maybeEnterCatchReady()) return
-    }
+  // BRIEF-CATCH-001: enter catch-ready synchronously when HP crosses threshold
+  if (inRealmFight()) {
+    if (syncCatchReadyFromHp()) return
   }
   await wait(550)
-  if (state.playMode === 'realm') {
-    if (state.monsterHp <= 0) {
-      onRealmMonsterDown()
-      return
-    }
-    if (maybeEnterCatchReady()) return
+  if (inRealmFight()) {
+    if (syncCatchReadyFromHp()) return
     nextRound()
     return
   }
@@ -1316,6 +1318,13 @@ function startLoop() {
       }
       if (state.timeLeft <= 0) {
         onSealFail('施印逾時')
+      }
+    } else if (state.screen === 'fight' && inRealmFight() && !state.sealOpen && !state.catchReady && !state.realmKnockout) {
+      // Safety net: HP may already be ≤ threshold if a path skipped maybeEnter
+      if (state.spirit && isCatchReady(state.monsterHp, state.spirit.rarity)) {
+        syncCatchReadyFromHp()
+        rafId = requestAnimationFrame(tick)
+        return
       }
     } else if (
       state.screen === 'fight' &&
@@ -1553,22 +1562,55 @@ async function startRealmEncounter() {
   }
 }
 
+
+/** Realm fight if playMode says so, OR spirit is present on fight screen (defensive). */
+function inRealmFight(): boolean {
+  if (state.spirit && state.screen === 'fight') {
+    // Heal accidental playMode flips during realm encounters
+    if (state.playMode !== 'realm') state.playMode = 'realm'
+    return true
+  }
+  return state.playMode === 'realm' && !!state.spirit
+}
+
+/** True when catch CTA should show (flag OR live HP ≤ threshold). */
+function shouldShowCatchUi(): boolean {
+  if (!inRealmFight() || !state.spirit) return false
+  if (state.catchReady || state.realmKnockout) return true
+  return isCatchReady(state.monsterHp, state.spirit.rarity)
+}
+
+/** Sync catchReady from live HP; call after any monster HP change. Returns true if now in catch UI. */
+function syncCatchReadyFromHp(): boolean {
+  if (!inRealmFight() || !state.spirit || state.sealOpen) return false
+  if (state.monsterHp <= 0) {
+    if (!state.realmKnockout || !state.catchReady) onRealmMonsterDown()
+    return true
+  }
+  if (isCatchReady(state.monsterHp, state.spirit.rarity)) {
+    return maybeEnterCatchReady()
+  }
+  return false
+}
+
 function maybeEnterCatchReady() {
-  if (state.playMode !== 'realm' || !state.spirit) return false
-  if (!isCatchReady(state.monsterHp, state.spirit.rarity)) return false
+  if (!inRealmFight() || !state.spirit) return false
+  if (!isCatchReady(state.monsterHp, state.spirit.rarity) && state.monsterHp > 0) return false
+  state.playMode = 'realm'
   state.catchReady = true
   state.phase = 'idle'
   stopLoop()
   voice.stop()
   state.status =
     state.monsterHp <= 0
-      ? '擊倒！可施印嘗試或收下金幣離開'
-      : `可施印！HP≤${catchThreshold(state.spirit.rarity)} — 按「施印」`
+      ? '擊倒！可施印嘗試或收下金幣離開 — 按「施印嘗試」'
+      : `可施印！HP ${Math.ceil(state.monsterHp)}≤${catchThreshold(state.spirit.rarity)}（${rarityLabel(state.spirit.rarity)}）— 按「施印」`
   if (state.monsterHp <= 0) state.realmKnockout = true
   render()
-  // Ensure CTA reachable on short viewports (fight layout is overflow-hidden)
   requestAnimationFrame(() => {
-    document.querySelector('#btn-seal')?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    document.querySelector('#catch-ready')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    const sealBtn = document.querySelector('#btn-seal') as HTMLButtonElement | null
+    sealBtn?.focus()
   })
   return true
 }
@@ -1576,6 +1618,7 @@ function maybeEnterCatchReady() {
 function onRealmMonsterDown() {
   stopLoop()
   voice.stop()
+  state.playMode = 'realm'
   state.phase = 'idle'
   state.realmKnockout = true
   state.catchReady = true
@@ -1587,7 +1630,7 @@ function onRealmMonsterDown() {
 }
 
 function wireRealmFightExtras() {
-  if (state.playMode !== 'realm') return
+  // Wire whenever CTA exists (don't gate on playMode — defensive)
   document.querySelector('#btn-seal')?.addEventListener('click', (e) => {
     e.preventDefault()
     e.stopPropagation()

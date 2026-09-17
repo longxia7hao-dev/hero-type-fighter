@@ -493,3 +493,33 @@
   pointer-events: auto;
   filter: none;
 }
+
+
+/* CATCH FAIL-fix: never hide seal CTA; pin under HUD */
+#catch-ready,
+.catch-ready-bar {
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  position: relative !important;
+  z-index: 40 !important;
+  flex-shrink: 0 !important;
+  margin: 8px 0 !important;
+  pointer-events: auto !important;
+}
+#btn-seal,
+.btn-seal {
+  display: inline-flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  min-height: 48px !important;
+}
+.fight-screen.realm-fight.is-catch-ready {
+  overflow-y: auto !important;
+}
+.fight-screen.realm-fight.is-catch-ready .stage {
+  max-height: 22vh !important;
+  min-height: 72px !important;
+  flex: 0 0 auto !important;
+}
