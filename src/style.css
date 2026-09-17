@@ -1518,7 +1518,9 @@ h1.game-title {
   height: 110px;
   border-radius: 50%;
   background: radial-gradient(circle at 35% 30%, var(--beast-a), var(--beast-b));
-  box-shadow: 0 0 24px color-mix(in srgb, var(--beast-a) 45%, transparent),
+  border: 2px solid var(--gold-edge, rgba(255, 215, 106, 0.7));
+  box-shadow: 0 0 0 1px rgba(255, 215, 106, 0.35),
+              0 0 24px color-mix(in srgb, var(--beast-a) 45%, transparent),
               inset 0 -8px 18px rgba(0,0,0,0.25);
   display: grid;
   place-items: center;
@@ -1536,3 +1538,35 @@ h1.game-title {
   opacity: 0.9;
 }
 .hub-howto { max-width: 520px; text-align: left; }
+
+
+/* ART-BEAST-001: trainer gender = simple silhouette, not job cards */
+.gender-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 18px 12px;
+}
+.gender-sil {
+  width: 56px;
+  height: 64px;
+  border-radius: 28px 28px 12px 12px;
+  background: linear-gradient(180deg, rgba(201,180,255,0.55), rgba(40,24,72,0.9));
+  border: 1px solid var(--gold-edge, rgba(255, 215, 106, 0.55));
+  position: relative;
+}
+.gender-sil::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 8px;
+  transform: translateX(-50%);
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(245,240,255,0.35);
+}
+.gender-sil.is-female {
+  background: linear-gradient(180deg, rgba(255,180,210,0.5), rgba(72,24,56,0.9));
+}
