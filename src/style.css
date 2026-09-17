@@ -1406,10 +1406,11 @@ h1.game-title {
 }
 
 
-/* HOTFIX mooncastle title: expose full moon (select/fight unchanged) */
+/* HOTFIX: title full moon readable (select/fight frozen) */
 .title-screen::before {
   background-image:
-    linear-gradient(180deg, rgba(12, 6, 28, 0.12) 0%, rgba(10, 6, 24, 0.4) 42%, rgba(6, 3, 16, 0.85) 100%),
-    var(--castle-bg, none);
-  background-position: center 18%;
+    linear-gradient(180deg, rgba(12, 6, 28, 0.05) 0%, rgba(10, 6, 24, 0.3) 40%, rgba(6, 3, 16, 0.8) 100%),
+    var(--title-bg, var(--castle-bg, none));
+  background-position: 70% 8%;
+  background-size: cover;
 }

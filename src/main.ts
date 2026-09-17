@@ -7,6 +7,10 @@ document.documentElement.style.setProperty(
   `url(${import.meta.env.BASE_URL}art/bg-castle.jpg)`,
 )
 document.documentElement.style.setProperty(
+  '--title-bg',
+  `url(${import.meta.env.BASE_URL}art/bg-title.jpg)`,
+)
+document.documentElement.style.setProperty(
   '--battle-bg',
   `url(${import.meta.env.BASE_URL}art/bg-battle.jpg)`,
 )

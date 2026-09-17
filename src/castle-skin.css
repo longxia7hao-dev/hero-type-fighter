@@ -32,13 +32,13 @@ html, body, #app {
   background: transparent !important;
 }
 
-/* HOTFIX: title must show full moon (asset moon sits upper-center; center bottom crops it) */
+/* HOTFIX: title full moon readable (select/fight frozen) */
 .title-screen::before {
   background-image:
-    linear-gradient(180deg, rgba(7, 4, 20, 0.12) 0%, rgba(10, 6, 24, 0.35) 42%, rgba(7, 4, 20, 0.82) 100%),
-    var(--castle-bg, none) !important;
+    linear-gradient(180deg, rgba(7, 4, 20, 0.05) 0%, rgba(10, 6, 24, 0.28) 40%, rgba(7, 4, 20, 0.78) 100%),
+    var(--title-bg, var(--castle-bg, none)) !important;
   background-size: cover !important;
-  background-position: center 18% !important;
+  background-position: 70% 8% !important;
   background-repeat: no-repeat !important;
 }
 
